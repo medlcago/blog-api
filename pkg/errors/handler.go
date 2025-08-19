@@ -6,10 +6,12 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/utils/v2"
 )
 
 func ErrorHandler(ctx fiber.Ctx, err error) error {
 	code := fiber.StatusInternalServerError
+	msg := utils.StatusMessage(code)
 
 	var fiberErr *fiber.Error
 	if goerrors.As(err, &fiberErr) {
@@ -26,8 +28,12 @@ func ErrorHandler(ctx fiber.Ctx, err error) error {
 		code = apiErr.Code
 	}
 
+	if code < 500 {
+		msg = err.Error()
+	}
+
 	return ctx.Status(code).JSON(response.Response[struct{}]{
 		OK:  false,
-		Msg: err.Error(),
+		Msg: msg,
 	})
 }

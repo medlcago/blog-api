@@ -1,6 +1,8 @@
 package posts
 
 import (
+	"blog-api/internal/models"
+	"blog-api/pkg/errors"
 	"blog-api/pkg/response"
 
 	"github.com/gofiber/fiber/v3"
@@ -23,13 +25,18 @@ func NewPostHandler(postService IPostService) IPostHandler {
 }
 
 func (h *PostHandler) CreatePost(ctx fiber.Ctx) error {
+	user := fiber.Locals[models.User](ctx, "user")
+	if user.ID == 0 {
+		return errors.ErrUnauthorized
+	}
+
 	var input CreatePostInput
 
 	if err := ctx.Bind().Body(&input); err != nil {
 		return err
 	}
 
-	res, err := h.postService.CreatePost(input)
+	res, err := h.postService.CreatePost(user.ID, input)
 	if err != nil {
 		return err
 	}

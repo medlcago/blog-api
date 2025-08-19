@@ -3,6 +3,7 @@ package posts
 import (
 	"blog-api/internal/database"
 	"blog-api/internal/models"
+	"blog-api/internal/users"
 	"blog-api/pkg/errors"
 	goerrors "errors"
 
@@ -10,7 +11,7 @@ import (
 )
 
 type IPostService interface {
-	CreatePost(input CreatePostInput) (PostResponse, error)
+	CreatePost(userID uint, input CreatePostInput) (PostResponse, error)
 	GetPost(postID uint) (PostResponse, error)
 	GetPosts() ([]PostResponse, error)
 }
@@ -22,12 +23,13 @@ func NewPostService() IPostService {
 	return &PostService{}
 }
 
-func (p *PostService) CreatePost(input CreatePostInput) (PostResponse, error) {
+func (p *PostService) CreatePost(userID uint, input CreatePostInput) (PostResponse, error) {
 	instance := database.GetDb()
 
 	post := models.Post{
-		Title:   input.Title,
-		Content: input.Content,
+		Title:    input.Title,
+		Content:  input.Content,
+		AuthorID: userID,
 	}
 
 	err := instance.Create(&post).Error
@@ -36,6 +38,7 @@ func (p *PostService) CreatePost(input CreatePostInput) (PostResponse, error) {
 	}
 	return PostResponse{
 		ID:        post.ID,
+		AuthorID:  post.AuthorID,
 		Title:     post.Title,
 		Content:   post.Content,
 		CreatedAt: post.CreatedAt,
@@ -47,18 +50,25 @@ func (p *PostService) GetPost(postID uint) (PostResponse, error) {
 
 	var post models.Post
 
-	err := instance.First(&post, postID).Error
+	err := instance.Preload("Author").First(&post, postID).Error
 	if err != nil {
 		if goerrors.Is(err, gorm.ErrRecordNotFound) {
-			return PostResponse{}, errors.New(404, "post not found")
+			return PostResponse{}, errors.ErrNotFound
 		}
 		return PostResponse{}, err
 	}
 	return PostResponse{
 		ID:        post.ID,
+		AuthorID:  post.AuthorID,
 		Title:     post.Title,
 		Content:   post.Content,
 		CreatedAt: post.CreatedAt,
+		Author: &users.UserResponse{
+			UserID:   post.Author.ID,
+			Username: post.Author.Username,
+			Email:    post.Author.Email.String,
+			Deleted:  post.Author.DeletedAt.Valid,
+		},
 	}, nil
 }
 
@@ -66,19 +76,26 @@ func (p *PostService) GetPosts() ([]PostResponse, error) {
 	instance := database.GetDb()
 
 	var posts []models.Post
-	output := make([]PostResponse, 0)
 
-	err := instance.Find(&posts).Error
+	err := instance.Preload("Author").Find(&posts).Error
 	if err != nil {
-		return output, err
+		return nil, err
 	}
 
+	output := make([]PostResponse, 0)
 	for _, post := range posts {
 		output = append(output, PostResponse{
 			ID:        post.ID,
+			AuthorID:  post.AuthorID,
 			Title:     post.Title,
 			Content:   post.Content,
 			CreatedAt: post.CreatedAt,
+			Author: &users.UserResponse{
+				UserID:   post.Author.ID,
+				Username: post.Author.Username,
+				Email:    post.Author.Email.String,
+				Deleted:  post.Author.DeletedAt.Valid,
+			},
 		})
 	}
 

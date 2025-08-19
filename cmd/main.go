@@ -1,15 +1,21 @@
 package main
 
 import (
+	"blog-api/internal/auth"
 	"blog-api/internal/database"
+	"blog-api/internal/middleware"
 	"blog-api/internal/posts"
+	"blog-api/internal/routes"
+	"blog-api/internal/users"
+	appvalidator "blog-api/internal/validator"
 	"blog-api/pkg/errors"
-	structValidator "blog-api/pkg/validator"
+	"blog-api/pkg/jwtmanager"
+	"blog-api/pkg/struct_validator"
 	"fmt"
 	"log"
 	"os"
+	"time"
 
-	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/logger"
 	"github.com/gofiber/fiber/v3/middleware/recover"
@@ -39,19 +45,41 @@ func main() {
 		log.Fatalf("database migration error: %v", err)
 	}
 
+	validator, err := appvalidator.New()
+	if err != nil {
+		log.Fatalf("validator error: %v", err)
+	}
+
 	app := fiber.New(fiber.Config{
-		StructValidator: structValidator.New(validator.New()),
+		StructValidator: struct_validator.New(validator),
 		ErrorHandler:    errors.ErrorHandler,
 	})
 
 	app.Use(logger.New())
 	app.Use(recover.New())
 
+	jwtManager := jwtmanager.NewJWTManager(os.Getenv("SECRET_KEY"), 30*time.Minute, 24*time.Hour)
+	userService := users.NewUserService(jwtManager)
+	middlewareManager := middleware.NewManager(jwtManager, userService)
+
+	{
+		authGroup := app.Group("/auth")
+		authService := auth.NewAuthService(jwtManager)
+		authHandler := auth.NewAuthHandler(authService)
+		routes.RegisterAuthRoutes(authGroup, authHandler)
+	}
+
+	{
+		usersGroup := app.Group("/users")
+		userHandler := users.NewUserHandler()
+		routes.RegisterUserRoutes(usersGroup, userHandler, middlewareManager)
+	}
+
 	{
 		postsGroup := app.Group("/posts")
 		postService := posts.NewPostService()
 		postHandler := posts.NewPostHandler(postService)
-		posts.RegisterRoutes(postsGroup, postHandler)
+		routes.RegisterPostRoutes(postsGroup, postHandler, middlewareManager)
 	}
 
 	log.Fatal(app.Listen(":3000"))

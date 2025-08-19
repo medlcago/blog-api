@@ -10,6 +10,10 @@ import (
 
 var DB *gorm.DB
 
+var (
+	ErrRecordNotFound = gorm.ErrRecordNotFound
+)
+
 func InitDB(dsn string) error {
 	if DB != nil {
 		return nil

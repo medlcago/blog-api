@@ -13,6 +13,7 @@ func RunMigrations() error {
 	}
 
 	err := DB.AutoMigrate(
+		&models.User{},
 		&models.Post{},
 	)
 	if err != nil {

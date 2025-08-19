@@ -1,4 +1,4 @@
-package validator
+package struct_validator
 
 import "github.com/go-playground/validator/v10"
 
