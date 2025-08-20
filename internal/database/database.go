@@ -87,3 +87,16 @@ func BuildDSN(DbHost, DbUser, DbPassword, DbName, DbPort string) string {
 		DbPort,
 	)
 }
+
+func Close() error {
+	if DB == nil {
+		return nil
+	}
+
+	sqlDB, err := DB.DB()
+	if err != nil {
+		return fmt.Errorf("get underlying DB: %w", err)
+	}
+
+	return sqlDB.Close()
+}

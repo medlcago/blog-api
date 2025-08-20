@@ -13,6 +13,9 @@ import (
 type Config struct {
 	SecretKey string `validate:"required"`
 
+	ServerHost string `validate:"required"`
+	ServerPort string `validate:"required"`
+
 	DbHost     string `validate:"required"`
 	DbUser     string `validate:"required"`
 	DbPassword string `validate:"required"`
@@ -61,6 +64,8 @@ func loadConfig() (*Config, error) {
 
 	config := &Config{
 		SecretKey:       v.GetString("SECRET_KEY"),
+		ServerHost:      v.GetString("SERVER_HOST"),
+		ServerPort:      v.GetString("SERVER_PORT"),
 		DbHost:          v.GetString("DB_HOST"),
 		DbUser:          v.GetString("DB_USER"),
 		DbPassword:      v.GetString("DB_PASSWORD"),
@@ -81,6 +86,8 @@ func loadConfig() (*Config, error) {
 }
 
 func setDefaults(v *viper.Viper) {
+	v.SetDefault("SERVER_HOST", "0.0.0.0")
+	v.SetDefault("SERVER_PORT", "3000")
 	v.SetDefault("MAX_IDLE_CONNS", 10)
 	v.SetDefault("MAX_OPEN_CONNS", 100)
 	v.SetDefault("CONN_MAX_LIFETIME", time.Hour)
