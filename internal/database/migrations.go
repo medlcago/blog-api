@@ -3,13 +3,11 @@ package database
 import (
 	"blog-api/internal/models"
 	"log"
-
-	"gorm.io/gorm"
 )
 
 func RunMigrations() error {
 	if DB == nil {
-		return gorm.ErrInvalidDB
+		return ErrNotInitialized
 	}
 
 	err := DB.AutoMigrate(

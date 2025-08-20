@@ -1,6 +1,7 @@
 package main
 
 import (
+	"blog-api/config"
 	"blog-api/internal/auth"
 	"blog-api/internal/database"
 	"blog-api/internal/middleware"
@@ -11,33 +12,25 @@ import (
 	"blog-api/pkg/errors"
 	"blog-api/pkg/jwtmanager"
 	"blog-api/pkg/struct_validator"
-	"fmt"
 	"log"
-	"os"
-	"time"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/logger"
 	"github.com/gofiber/fiber/v3/middleware/recover"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
+	if err := config.Init(); err != nil {
+		log.Fatalf("init config error: %v", err)
 	}
 
-	dsn := fmt.Sprintf(
-		"host=%s user=%s password=%s dbname=%s port=%s sslmode=disable",
-		os.Getenv("DB_HOST"),
-		os.Getenv("DB_USER"),
-		os.Getenv("DB_PASSWORD"),
-		os.Getenv("DB_NAME"),
-		os.Getenv("DB_PORT"),
-	)
+	cfg := config.GetConfig()
 
-	if err := database.InitDB(dsn); err != nil {
+	if err := database.InitDB(database.BuildDSN(cfg.DbHost, cfg.DbUser, cfg.DbPassword, cfg.DbName, cfg.DbPort), &database.PoolConfig{
+		MaxIdleConns:    cfg.MaxIdleConns,
+		MaxOpenConns:    cfg.MaxOpenConns,
+		ConnMaxLifetime: cfg.ConnMaxLifetime,
+	}); err != nil {
 		log.Fatalf("database init error: %v", err)
 	}
 
@@ -58,25 +51,26 @@ func main() {
 	app.Use(logger.New())
 	app.Use(recover.New())
 
-	jwtManager := jwtmanager.NewJWTManager(os.Getenv("SECRET_KEY"), 30*time.Minute, 24*time.Hour)
+	jwtManager := jwtmanager.NewJWTManager(cfg.SecretKey, cfg.JwtAccessTTL, cfg.JwtRefreshTTL)
 	userService := users.NewUserService(jwtManager)
 	middlewareManager := middleware.NewManager(jwtManager, userService)
 
+	apiGroup := app.Group("/api")
 	{
-		authGroup := app.Group("/auth")
+		authGroup := apiGroup.Group("/auth")
 		authService := auth.NewAuthService(jwtManager)
 		authHandler := auth.NewAuthHandler(authService)
 		routes.RegisterAuthRoutes(authGroup, authHandler)
 	}
 
 	{
-		usersGroup := app.Group("/users")
+		usersGroup := apiGroup.Group("/users")
 		userHandler := users.NewUserHandler()
 		routes.RegisterUserRoutes(usersGroup, userHandler, middlewareManager)
 	}
 
 	{
-		postsGroup := app.Group("/posts")
+		postsGroup := apiGroup.Group("/posts")
 		postService := posts.NewPostService()
 		postHandler := posts.NewPostHandler(postService)
 		routes.RegisterPostRoutes(postsGroup, postHandler, middlewareManager)
