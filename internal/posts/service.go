@@ -12,7 +12,7 @@ import (
 type IPostService interface {
 	CreatePost(userID uint, input CreatePostInput) (PostResponse, error)
 	GetPost(postID uint) (PostResponse, error)
-	GetPosts() ([]PostResponse, error)
+	GetPosts(filter database.Filter) ([]PostResponse, error)
 }
 
 type PostService struct {
@@ -56,12 +56,15 @@ func (p *PostService) GetPost(postID uint) (PostResponse, error) {
 	return MapPostToResponse(post), nil
 }
 
-func (p *PostService) GetPosts() ([]PostResponse, error) {
+func (p *PostService) GetPosts(filter database.Filter) ([]PostResponse, error) {
 	db := p.db.Get()
 
 	var posts []models.Post
 
-	err := db.Preload("Author").Find(&posts).Error
+	query := db.Preload("Author")
+	query = filter.Apply(query)
+
+	err := query.Find(&posts).Error
 	if err != nil {
 		return nil, err
 	}

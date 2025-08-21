@@ -60,7 +60,14 @@ func (h *PostHandler) GetPost(ctx fiber.Ctx) error {
 }
 
 func (h *PostHandler) GetPosts(ctx fiber.Ctx) error {
-	res, err := h.postService.GetPosts()
+	var filter FilterParams
+	if err := ctx.Bind().Query(&filter); err != nil {
+		return errors.ErrInvalidQuery
+	}
+
+	filter = DefaultFilterParams(filter)
+
+	res, err := h.postService.GetPosts(&filter)
 	if err != nil {
 		return err
 	}
