@@ -2,8 +2,6 @@ package config
 
 import (
 	"fmt"
-	"sync"
-
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -13,44 +11,20 @@ import (
 type Config struct {
 	SecretKey string `validate:"required"`
 
-	ServerHost string `validate:"required"`
-	ServerPort string `validate:"required"`
-
-	DbHost     string `validate:"required"`
-	DbUser     string `validate:"required"`
-	DbPassword string `validate:"required"`
-	DbName     string `validate:"required"`
-	DbPort     string `validate:"required"`
-
-	MaxIdleConns    int           `validate:"required"`
-	MaxOpenConns    int           `validate:"required"`
-	ConnMaxLifetime time.Duration `validate:"required"`
-
-	JwtAccessTTL  time.Duration `validate:"required"`
-	JwtRefreshTTL time.Duration `validate:"required"`
+	ServerConfig   `validate:"required"`
+	DatabaseConfig `validate:"required"`
+	JwtConfig      `validate:"required"`
 }
 
-var (
-	configInstance *Config
-	configOnce     sync.Once
-	configErr      error
-)
-
-func Init() error {
-	configOnce.Do(func() {
-		configInstance, configErr = loadConfig()
-	})
-	return configErr
-}
-
-func GetConfig() *Config {
-	if configInstance == nil {
-		panic("config not initialized. Call Init() first")
+func MustGet() *Config {
+	cfg, err := Get()
+	if err != nil {
+		panic("failed to get config: " + err.Error())
 	}
-	return configInstance
+	return cfg
 }
 
-func loadConfig() (*Config, error) {
+func Get() (*Config, error) {
 	v := viper.New()
 	v.SetConfigFile(".env")
 
@@ -63,19 +37,25 @@ func loadConfig() (*Config, error) {
 	setDefaults(v)
 
 	config := &Config{
-		SecretKey:       v.GetString("SECRET_KEY"),
-		ServerHost:      v.GetString("SERVER_HOST"),
-		ServerPort:      v.GetString("SERVER_PORT"),
-		DbHost:          v.GetString("DB_HOST"),
-		DbUser:          v.GetString("DB_USER"),
-		DbPassword:      v.GetString("DB_PASSWORD"),
-		DbName:          v.GetString("DB_NAME"),
-		DbPort:          v.GetString("DB_PORT"),
-		MaxIdleConns:    v.GetInt("MAX_IDLE_CONNS"),
-		MaxOpenConns:    v.GetInt("MAX_OPEN_CONNS"),
-		ConnMaxLifetime: v.GetDuration("CONN_MAX_LIFETIME"),
-		JwtAccessTTL:    v.GetDuration("JWT_ACCESS_TTL"),
-		JwtRefreshTTL:   v.GetDuration("JWT_REFRESH_TTL"),
+		SecretKey: v.GetString("SECRET_KEY"),
+		ServerConfig: ServerConfig{
+			ServerHost: v.GetString("SERVER_HOST"),
+			ServerPort: v.GetString("SERVER_PORT"),
+		},
+		DatabaseConfig: DatabaseConfig{
+			DbHost:          v.GetString("DB_HOST"),
+			DbUser:          v.GetString("DB_USER"),
+			DbPassword:      v.GetString("DB_PASSWORD"),
+			DbName:          v.GetString("DB_NAME"),
+			DbPort:          v.GetString("DB_PORT"),
+			MaxIdleConns:    v.GetInt("MAX_IDLE_CONNS"),
+			MaxOpenConns:    v.GetInt("MAX_OPEN_CONNS"),
+			ConnMaxLifetime: v.GetDuration("CONN_MAX_LIFETIME"),
+		},
+		JwtConfig: JwtConfig{
+			JwtAccessTTL:  v.GetDuration("JWT_ACCESS_TTL"),
+			JwtRefreshTTL: v.GetDuration("JWT_REFRESH_TTL"),
+		},
 	}
 
 	if err := validateConfig(config); err != nil {

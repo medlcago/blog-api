@@ -1,6 +1,7 @@
 package jwtmanager
 
 import (
+	"blog-api/config"
 	"errors"
 	"time"
 
@@ -24,11 +25,11 @@ type JWTManager struct {
 	refreshTTL time.Duration
 }
 
-func NewJWTManager(secret string, accessTTL, refreshTTL time.Duration) *JWTManager {
+func NewJWTManager(secret string, cfg config.JwtConfig) *JWTManager {
 	return &JWTManager{
 		secretKey:  []byte(secret),
-		accessTTL:  accessTTL,
-		refreshTTL: refreshTTL,
+		accessTTL:  cfg.JwtAccessTTL,
+		refreshTTL: cfg.JwtRefreshTTL,
 	}
 }
 

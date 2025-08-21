@@ -2,22 +2,12 @@ package database
 
 import (
 	"blog-api/internal/models"
-	"log"
 )
 
-func RunMigrations() error {
-	if DB == nil {
-		return ErrNotInitialized
-	}
-
-	err := DB.AutoMigrate(
+func (d *DB) RunMigrations() error {
+	db := d.Get()
+	return db.AutoMigrate(
 		&models.User{},
 		&models.Post{},
 	)
-	if err != nil {
-		return err
-	}
-
-	log.Println("✅ Database migrations completed")
-	return nil
 }

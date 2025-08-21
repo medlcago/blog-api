@@ -12,8 +12,8 @@ type LoginUserInput struct {
 
 type TokenResponse struct {
 	AccessToken          string `json:"access_token"`
-	AccessTokenExpiresIn int64  `json:"access_token_expires_in"`
+	AccessTokenExpiresIn int    `json:"access_token_expires_in"`
 
 	RefreshToken          string `json:"refresh_token"`
-	RefreshTokenExpiresIn int64  `json:"refresh_token_expires_in"`
+	RefreshTokenExpiresIn int    `json:"refresh_token_expires_in"`
 }

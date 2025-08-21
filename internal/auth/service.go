@@ -17,11 +17,13 @@ type IAuthService interface {
 
 type AuthService struct {
 	jwtManager *jwtmanager.JWTManager
+	db         *database.DB
 }
 
-func NewAuthService(jwtManager *jwtmanager.JWTManager) *AuthService {
+func NewAuthService(jwtManager *jwtmanager.JWTManager, db *database.DB) *AuthService {
 	return &AuthService{
 		jwtManager: jwtManager,
+		db:         db,
 	}
 }
 
@@ -35,17 +37,17 @@ func (a *AuthService) Token(userID string) (TokenResponse, error) {
 
 	return TokenResponse{
 		AccessToken:           accessToken,
-		AccessTokenExpiresIn:  int64(a.jwtManager.AccessTTL().Seconds()),
+		AccessTokenExpiresIn:  int(a.jwtManager.AccessTTL().Seconds()),
 		RefreshToken:          refreshToken,
-		RefreshTokenExpiresIn: int64(a.jwtManager.RefreshTTL().Seconds()),
+		RefreshTokenExpiresIn: int(a.jwtManager.RefreshTTL().Seconds()),
 	}, nil
 }
 
 func (a *AuthService) Register(input RegisterUserInput) (TokenResponse, error) {
-	instance := database.GetDb()
+	db := a.db.Get()
 
 	var user models.User
-	err := instance.Where("LOWER(username) = LOWER(?)", input.Username).First(&user).Error
+	err := db.Where("LOWER(username) = LOWER(?)", input.Username).First(&user).Error
 
 	if err == nil {
 		return TokenResponse{}, errors.ErrUsernameAlreadyExists
@@ -64,7 +66,7 @@ func (a *AuthService) Register(input RegisterUserInput) (TokenResponse, error) {
 		Username: input.Username,
 		Password: hashedPassword,
 	}
-	if err = instance.Create(&user).Error; err != nil {
+	if err = db.Create(&user).Error; err != nil {
 		return TokenResponse{}, err
 	}
 
@@ -74,11 +76,11 @@ func (a *AuthService) Register(input RegisterUserInput) (TokenResponse, error) {
 }
 
 func (a *AuthService) Login(input LoginUserInput) (TokenResponse, error) {
-	instance := database.GetDb()
+	db := a.db.Get()
 
 	var user models.User
 
-	if err := instance.Where("LOWER(username) = LOWER(?)", input.Username).First(&user).Error; err != nil {
+	if err := db.Where("LOWER(username) = LOWER(?)", input.Username).First(&user).Error; err != nil {
 		return TokenResponse{}, errors.ErrInvalidCredentials
 	}
 

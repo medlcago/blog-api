@@ -25,13 +25,9 @@ func (u *UserHandler) GetMe(ctx fiber.Ctx) error {
 		return errors.ErrUnauthorized
 	}
 
+	data := MapUserToResponse(user)
 	return ctx.JSON(response.Response[UserResponse]{
-		OK: true,
-		Data: UserResponse{
-			UserID:   user.ID,
-			Username: user.Username,
-			Email:    user.Email.String,
-			Deleted:  user.DeletedAt.Valid,
-		},
+		OK:   true,
+		Data: data,
 	})
 }

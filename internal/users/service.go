@@ -12,19 +12,21 @@ type IUserService interface {
 
 type UserService struct {
 	jwtManager *jwtmanager.JWTManager
+	db         *database.DB
 }
 
-func NewUserService(jwtManager *jwtmanager.JWTManager) IUserService {
+func NewUserService(jwtManager *jwtmanager.JWTManager, db *database.DB) IUserService {
 	return &UserService{
 		jwtManager: jwtManager,
+		db:         db,
 	}
 }
 
 func (s *UserService) GetUserByID(userID uint) (models.User, error) {
-	instance := database.GetDb()
+	db := s.db.Get()
 
 	var user models.User
-	if err := instance.First(&user, userID).Error; err != nil {
+	if err := db.First(&user, userID).Error; err != nil {
 		return models.User{}, err
 	}
 	return user, nil

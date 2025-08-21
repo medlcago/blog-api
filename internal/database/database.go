@@ -1,102 +1,61 @@
 package database
 
 import (
+	"blog-api/config"
 	"fmt"
-	"log"
-	"sync"
 	"time"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
-var (
-	DB        *gorm.DB
-	initOnce  sync.Once
-	initError error
-)
-var (
-	ErrNotInitialized = fmt.Errorf("database not initialized")
-	ErrEmptyDSN       = fmt.Errorf("DSN cannot be empty")
+var ErrRecordNotFound = gorm.ErrRecordNotFound
 
-	ErrRecordNotFound = gorm.ErrRecordNotFound
-)
-
-type PoolConfig struct {
-	MaxIdleConns    int
-	MaxOpenConns    int
-	ConnMaxLifetime time.Duration
+type DB struct {
+	db *gorm.DB
 }
 
-func InitDB(dsn string, poolConfig *PoolConfig) error {
-	initOnce.Do(func() {
-		if dsn == "" {
-			initError = ErrEmptyDSN
-			return
-		}
-
-		db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-			NowFunc: func() time.Time {
-				return time.Now().UTC()
-			},
-		})
-
-		if err != nil {
-			initError = err
-			return
-		}
-
-		sqlDB, err := db.DB()
-		if err != nil {
-			initError = err
-			return
-		}
-
-		if err := sqlDB.Ping(); err != nil {
-			initError = err
-			return
-		}
-
-		if poolConfig != nil {
-			sqlDB.SetMaxIdleConns(poolConfig.MaxIdleConns)
-			sqlDB.SetMaxOpenConns(poolConfig.MaxOpenConns)
-			sqlDB.SetConnMaxLifetime(poolConfig.ConnMaxLifetime)
-		}
-
-		DB = db
-		log.Println("✅ Successfully connected to the database")
+func New(cfg config.DatabaseConfig) (*DB, error) {
+	db, err := gorm.Open(postgres.Open(BuildDSN(cfg)), &gorm.Config{
+		NowFunc: func() time.Time {
+			return time.Now().UTC()
+		},
 	})
-
-	return initError
-}
-
-func GetDb() *gorm.DB {
-	if DB == nil {
-		panic("DB not initialized. Call InitDB() first")
+	if err != nil {
+		return nil, err
 	}
-	return DB
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
+
+	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
+	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
+	sqlDB.SetConnMaxLifetime(cfg.ConnMaxLifetime)
+
+	return &DB{db: db}, nil
 }
 
-func BuildDSN(DbHost, DbUser, DbPassword, DbName, DbPort string) string {
+func (d *DB) Get() *gorm.DB {
+	return d.db
+}
+
+func (d *DB) Close() error {
+	sqlDB, err := d.Get().DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.Close()
+}
+
+func BuildDSN(cfg config.DatabaseConfig) string {
 	return fmt.Sprintf(
 		"host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=UTC",
-		DbHost,
-		DbUser,
-		DbPassword,
-		DbName,
-		DbPort,
+		cfg.DbHost,
+		cfg.DbUser,
+		cfg.DbPassword,
+		cfg.DbName,
+		cfg.DbPort,
 	)
-}
-
-func Close() error {
-	if DB == nil {
-		return nil
-	}
-
-	sqlDB, err := DB.DB()
-	if err != nil {
-		return fmt.Errorf("get underlying DB: %w", err)
-	}
-
-	return sqlDB.Close()
 }

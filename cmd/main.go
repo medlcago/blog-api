@@ -2,22 +2,40 @@ package main
 
 import (
 	"blog-api/config"
+	"blog-api/internal/database"
 	"blog-api/internal/server"
+	appvalidator "blog-api/internal/validator"
 	"log"
+	"os"
 )
 
 func main() {
-	if err := config.Init(); err != nil {
-		log.Fatalf("init config err: %v", err)
-	}
-	cfg := config.GetConfig()
+	logger := log.New(os.Stderr, "APP: ", log.Ldate|log.Ltime|log.Lshortfile)
 
-	s, err := server.NewServer(cfg)
+	logger.Println("Starting application initialization...")
+
+	cfg := config.MustGet()
+	db, err := database.New(cfg.DatabaseConfig)
 	if err != nil {
-		log.Fatalf("failed to init server: %v", err)
+		logger.Fatalf("failed to init database: %v", err)
+	}
+
+	if err = db.RunMigrations(); err != nil {
+		logger.Fatalf("failed to run database migrations: %v", err)
+	}
+	logger.Println("✅ Database migrations completed")
+
+	validate, err := appvalidator.New()
+	if err != nil {
+		logger.Fatalf("failed to init validator: %v", err)
+	}
+
+	s, err := server.NewServer(cfg, db, validate, logger)
+	if err != nil {
+		logger.Fatalf("failed to init server: %v", err)
 	}
 
 	if err := s.Run(); err != nil {
-		log.Fatalf("server stopped with error: %v", err)
+		logger.Fatalf("server stopped with error: %v", err)
 	}
 }
