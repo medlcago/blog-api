@@ -51,11 +51,13 @@ func (d *DB) Close() error {
 
 func BuildDSN(cfg config.DatabaseConfig) string {
 	return fmt.Sprintf(
-		"host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=UTC",
+		"host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=%s",
 		cfg.DbHost,
 		cfg.DbUser,
 		cfg.DbPassword,
 		cfg.DbName,
 		cfg.DbPort,
+		cfg.SSLMode,
+		cfg.TimeZone,
 	)
 }

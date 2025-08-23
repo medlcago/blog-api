@@ -1,7 +1,6 @@
 package users
 
 import (
-	"blog-api/internal/models"
 	"blog-api/pkg/errors"
 	"blog-api/pkg/response"
 
@@ -20,14 +19,13 @@ func NewUserHandler() IUserHandler {
 }
 
 func (u *UserHandler) GetMe(ctx fiber.Ctx) error {
-	user := fiber.Locals[models.User](ctx, "user")
-	if user.ID == 0 {
+	user := fiber.Locals[*UserResponse](ctx, "user")
+	if user == nil {
 		return errors.ErrUnauthorized
 	}
 
-	data := MapUserToResponse(user)
-	return ctx.JSON(response.Response[UserResponse]{
+	return ctx.JSON(response.Response[*UserResponse]{
 		OK:   true,
-		Data: data,
+		Data: user,
 	})
 }

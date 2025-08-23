@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"blog-api/pkg/errors"
 	"blog-api/pkg/response"
 
 	"github.com/gofiber/fiber/v3"
@@ -25,7 +26,7 @@ func (a AuthHandler) Register(ctx fiber.Ctx) error {
 	var input RegisterUserInput
 
 	if err := ctx.Bind().JSON(&input); err != nil {
-		return err
+		return errors.ErrInvalidBody
 	}
 
 	res, err := a.authService.Register(input)
@@ -33,7 +34,7 @@ func (a AuthHandler) Register(ctx fiber.Ctx) error {
 		return err
 	}
 
-	return ctx.Status(201).JSON(response.Response[TokenResponse]{
+	return ctx.Status(201).JSON(response.Response[*TokenResponse]{
 		OK:   true,
 		Msg:  "User registered!",
 		Data: res,
@@ -45,7 +46,7 @@ func (a AuthHandler) Login(ctx fiber.Ctx) error {
 	var input LoginUserInput
 
 	if err := ctx.Bind().JSON(&input); err != nil {
-		return err
+		return errors.ErrInvalidBody
 	}
 
 	res, err := a.authService.Login(input)
@@ -53,7 +54,7 @@ func (a AuthHandler) Login(ctx fiber.Ctx) error {
 		return err
 	}
 
-	return ctx.JSON(response.Response[TokenResponse]{
+	return ctx.JSON(response.Response[*TokenResponse]{
 		OK:   true,
 		Msg:  "User logged in!",
 		Data: res,

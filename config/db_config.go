@@ -8,6 +8,8 @@ type DatabaseConfig struct {
 	DbPassword string `validate:"required"`
 	DbName     string `validate:"required"`
 	DbPort     string `validate:"required"`
+	SSLMode    string `validate:"required"`
+	TimeZone   string `validate:"required"`
 
 	MaxIdleConns    int           `validate:"required"`
 	MaxOpenConns    int           `validate:"required"`

@@ -7,7 +7,12 @@ import (
 	appvalidator "blog-api/internal/validator"
 	"log"
 	"os"
+	"time"
 )
+
+func init() {
+	time.Local = time.UTC
+}
 
 func main() {
 	logger := log.New(os.Stderr, "APP: ", log.Ldate|log.Ltime|log.Lshortfile)

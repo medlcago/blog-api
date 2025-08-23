@@ -7,7 +7,7 @@ import (
 )
 
 type IUserService interface {
-	GetUserByID(userID uint) (models.User, error)
+	GetUserByID(userID uint) (*UserResponse, error)
 }
 
 type UserService struct {
@@ -22,12 +22,12 @@ func NewUserService(jwtManager *jwtmanager.JWTManager, db *database.DB) IUserSer
 	}
 }
 
-func (s *UserService) GetUserByID(userID uint) (models.User, error) {
+func (s *UserService) GetUserByID(userID uint) (*UserResponse, error) {
 	db := s.db.Get()
 
 	var user models.User
 	if err := db.First(&user, userID).Error; err != nil {
-		return models.User{}, err
+		return nil, err
 	}
-	return user, nil
+	return MapUserToResponse(user), nil
 }

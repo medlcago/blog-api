@@ -7,4 +7,5 @@ var (
 	ErrUnauthorized          = New(401, "unauthorized")
 	ErrNotFound              = New(404, "not found")
 	ErrInvalidQuery          = New(400, "invalid query parameters")
+	ErrInvalidBody           = New(400, "invalid request body")
 )

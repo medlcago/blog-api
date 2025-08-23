@@ -11,8 +11,8 @@ import (
 )
 
 type IAuthService interface {
-	Register(input RegisterUserInput) (TokenResponse, error)
-	Login(input LoginUserInput) (TokenResponse, error)
+	Register(input RegisterUserInput) (*TokenResponse, error)
+	Login(input LoginUserInput) (*TokenResponse, error)
 }
 
 type AuthService struct {
@@ -27,15 +27,15 @@ func NewAuthService(jwtManager *jwtmanager.JWTManager, db *database.DB) *AuthSer
 	}
 }
 
-func (a *AuthService) Token(userID string) (TokenResponse, error) {
+func (a *AuthService) Token(userID string) (*TokenResponse, error) {
 	accessToken, err1 := a.jwtManager.GenerateToken(userID, jwtmanager.AccessToken)
 	refreshToken, err2 := a.jwtManager.GenerateToken(userID, jwtmanager.RefreshToken)
 
 	if err := goerrors.Join(err1, err2); err != nil {
-		return TokenResponse{}, err
+		return nil, err
 	}
 
-	return TokenResponse{
+	return &TokenResponse{
 		AccessToken:           accessToken,
 		AccessTokenExpiresIn:  int(a.jwtManager.AccessTTL().Seconds()),
 		RefreshToken:          refreshToken,
@@ -43,23 +43,23 @@ func (a *AuthService) Token(userID string) (TokenResponse, error) {
 	}, nil
 }
 
-func (a *AuthService) Register(input RegisterUserInput) (TokenResponse, error) {
+func (a *AuthService) Register(input RegisterUserInput) (*TokenResponse, error) {
 	db := a.db.Get()
 
 	var user models.User
 	err := db.Where("LOWER(username) = LOWER(?)", input.Username).First(&user).Error
 
 	if err == nil {
-		return TokenResponse{}, errors.ErrUsernameAlreadyExists
+		return nil, errors.ErrUsernameAlreadyExists
 	}
 
 	if !goerrors.Is(err, database.ErrRecordNotFound) {
-		return TokenResponse{}, err
+		return nil, err
 	}
 
 	hashedPassword, err := password.HashPassword(input.Password)
 	if err != nil {
-		return TokenResponse{}, err
+		return nil, err
 	}
 
 	user = models.User{
@@ -67,7 +67,7 @@ func (a *AuthService) Register(input RegisterUserInput) (TokenResponse, error) {
 		Password: hashedPassword,
 	}
 	if err = db.Create(&user).Error; err != nil {
-		return TokenResponse{}, err
+		return nil, err
 	}
 
 	userID := strconv.Itoa(int(user.ID))
@@ -75,17 +75,17 @@ func (a *AuthService) Register(input RegisterUserInput) (TokenResponse, error) {
 
 }
 
-func (a *AuthService) Login(input LoginUserInput) (TokenResponse, error) {
+func (a *AuthService) Login(input LoginUserInput) (*TokenResponse, error) {
 	db := a.db.Get()
 
 	var user models.User
 
 	if err := db.Where("LOWER(username) = LOWER(?)", input.Username).First(&user).Error; err != nil {
-		return TokenResponse{}, errors.ErrInvalidCredentials
+		return nil, errors.ErrInvalidCredentials
 	}
 
 	if !password.CheckPasswordHash(input.Password, user.Password) {
-		return TokenResponse{}, errors.ErrInvalidCredentials
+		return nil, errors.ErrInvalidCredentials
 	}
 
 	userID := strconv.Itoa(int(user.ID))

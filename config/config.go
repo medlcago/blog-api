@@ -43,11 +43,15 @@ func Get() (*Config, error) {
 			ServerPort: v.GetString("SERVER_PORT"),
 		},
 		DatabaseConfig: DatabaseConfig{
-			DbHost:          v.GetString("DB_HOST"),
-			DbUser:          v.GetString("DB_USER"),
-			DbPassword:      v.GetString("DB_PASSWORD"),
-			DbName:          v.GetString("DB_NAME"),
-			DbPort:          v.GetString("DB_PORT"),
+			DbHost:     v.GetString("DB_HOST"),
+			DbUser:     v.GetString("DB_USER"),
+			DbPassword: v.GetString("DB_PASSWORD"),
+			DbName:     v.GetString("DB_NAME"),
+			DbPort:     v.GetString("DB_PORT"),
+
+			SSLMode:  v.GetString("SSL_MODE"),
+			TimeZone: v.GetString("TIME_ZONE"),
+
 			MaxIdleConns:    v.GetInt("MAX_IDLE_CONNS"),
 			MaxOpenConns:    v.GetInt("MAX_OPEN_CONNS"),
 			ConnMaxLifetime: v.GetDuration("CONN_MAX_LIFETIME"),
@@ -68,9 +72,14 @@ func Get() (*Config, error) {
 func setDefaults(v *viper.Viper) {
 	v.SetDefault("SERVER_HOST", "0.0.0.0")
 	v.SetDefault("SERVER_PORT", "3000")
+
+	v.SetDefault("SSL_MODE", "disable")
+	v.SetDefault("TIME_ZONE", "UTC")
+
 	v.SetDefault("MAX_IDLE_CONNS", 10)
 	v.SetDefault("MAX_OPEN_CONNS", 100)
 	v.SetDefault("CONN_MAX_LIFETIME", time.Hour)
+
 	v.SetDefault("JWT_ACCESS_TTL", 30*time.Minute)
 	v.SetDefault("JWT_REFRESH_TTL", 24*30*time.Hour)
 }
