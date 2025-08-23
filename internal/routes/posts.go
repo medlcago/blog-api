@@ -11,4 +11,6 @@ func RegisterPostRoutes(r fiber.Router, h posts.IPostHandler, middlewareManager 
 	r.Post("/", middlewareManager.AuthMiddleware(), h.CreatePost)
 	r.Get("/:id<int>", h.GetPost)
 	r.Get("/", h.GetPosts)
+	r.Put("/:id<int>", middlewareManager.AuthMiddleware(), h.UpdatePost)
+	r.Delete("/:id<int>", middlewareManager.AuthMiddleware(), h.DeletePost)
 }

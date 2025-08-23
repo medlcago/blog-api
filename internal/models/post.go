@@ -10,5 +10,6 @@ type Post struct {
 	Content  string `gorm:"type:text;not null"`
 	AuthorID uint   `gorm:"index;not null"`
 
-	Author User `gorm:"foreignKey:AuthorID"`
+	Author   User         `gorm:"foreignKey:AuthorID"`
+	Entities []PostEntity `gorm:"foreignKey:PostID;constraint:OnDelete:CASCADE"`
 }

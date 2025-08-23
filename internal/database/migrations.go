@@ -9,5 +9,6 @@ func (d *DB) RunMigrations() error {
 	return db.AutoMigrate(
 		&models.User{},
 		&models.Post{},
+		&models.PostEntity{},
 	)
 }
