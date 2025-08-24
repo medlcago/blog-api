@@ -14,6 +14,7 @@ type Config struct {
 	ServerConfig   `validate:"required"`
 	DatabaseConfig `validate:"required"`
 	JwtConfig      `validate:"required"`
+	RedisConfig    `validate:"required"`
 }
 
 func MustGet() *Config {
@@ -60,6 +61,11 @@ func Get() (*Config, error) {
 			JwtAccessTTL:  v.GetDuration("JWT_ACCESS_TTL"),
 			JwtRefreshTTL: v.GetDuration("JWT_REFRESH_TTL"),
 		},
+		RedisConfig: RedisConfig{
+			Addr:     v.GetString("REDIS_ADDR"),
+			Password: v.GetString("REDIS_PASSWORD"),
+			DB:       v.GetInt("REDIS_DB"),
+		},
 	}
 
 	if err := validateConfig(config); err != nil {
@@ -82,6 +88,10 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault("JWT_ACCESS_TTL", 30*time.Minute)
 	v.SetDefault("JWT_REFRESH_TTL", 24*30*time.Hour)
+
+	v.SetDefault("REDIS_ADDR", "127.0.0.1:6379")
+	v.SetDefault("REDIS_PASSWORD", "")
+	v.SetDefault("REDIS_DB", 0)
 }
 
 func validateConfig(cfg *Config) error {
