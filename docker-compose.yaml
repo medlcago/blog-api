@@ -3,8 +3,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
     depends_on:
       - postgres
     volumes:
@@ -34,6 +32,17 @@ services:
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
+
+  nginx:
+    container_name: nginx
+    build:
+      context: ./nginx
+      dockerfile: ./Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - app
+    restart: always
 
 volumes:
   postgres_data:
