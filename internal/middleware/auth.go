@@ -1,8 +1,8 @@
 package middleware
 
 import (
+	"blog-api/internal/jwtmanager"
 	"blog-api/pkg/errors"
-	"blog-api/pkg/jwtmanager"
 	"strconv"
 	"strings"
 

@@ -29,3 +29,8 @@ type PostResponse struct {
 	Author   *users.UserResponse `json:"author,omitempty"`
 	Entities []*PostEntityInput  `json:"entities"`
 }
+
+type ListResponse struct {
+	Total  int64           `json:"total"`
+	Result []*PostResponse `json:"result"`
+}

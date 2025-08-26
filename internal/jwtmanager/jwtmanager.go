@@ -6,18 +6,13 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 const (
 	AccessToken  = "access"
 	RefreshToken = "refresh"
 )
-
-type Claims struct {
-	TokenType string `json:"type"`
-	UserID    string `json:"uid"`
-	jwt.RegisteredClaims
-}
 
 type JWTManager struct {
 	secretKey  []byte
@@ -28,8 +23,8 @@ type JWTManager struct {
 func NewJWTManager(secret string, cfg config.JwtConfig) *JWTManager {
 	return &JWTManager{
 		secretKey:  []byte(secret),
-		accessTTL:  cfg.JwtAccessTTL,
-		refreshTTL: cfg.JwtRefreshTTL,
+		accessTTL:  cfg.AccessTTL,
+		refreshTTL: cfg.RefreshTTL,
 	}
 }
 
@@ -60,6 +55,7 @@ func (m *JWTManager) GenerateToken(userID string, tokenType string) (string, err
 			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
 			IssuedAt:  jwt.NewNumericDate(now),
 			Subject:   userID,
+			ID:        uuid.NewString(),
 		},
 	}
 

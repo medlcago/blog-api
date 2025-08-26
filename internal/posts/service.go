@@ -4,17 +4,18 @@ import (
 	"blog-api/internal/database"
 	"blog-api/internal/models"
 	"blog-api/pkg/errors"
+	"context"
 	goerrors "errors"
 
 	"gorm.io/gorm"
 )
 
 type IPostService interface {
-	CreatePost(userID uint, input CreatePostInput) (*PostResponse, error)
-	GetPost(postID uint) (*PostResponse, error)
-	GetPosts(filter database.Filter) ([]*PostResponse, error)
-	UpdatePost(userID uint, postID uint, input CreatePostInput) (*PostResponse, error)
-	DeletePost(userID uint, postID uint) error
+	CreatePost(ctx context.Context, userID uint, input CreatePostInput) (*PostResponse, error)
+	GetPost(ctx context.Context, postID uint) (*PostResponse, error)
+	GetPosts(ctx context.Context, params FilterParams) (*ListResponse, error)
+	UpdatePost(ctx context.Context, userID uint, postID uint, input CreatePostInput) (*PostResponse, error)
+	DeletePost(ctx context.Context, userID uint, postID uint) error
 }
 
 type PostService struct {
@@ -27,8 +28,8 @@ func NewPostService(db *database.DB) IPostService {
 	}
 }
 
-func (p *PostService) CreatePost(userID uint, input CreatePostInput) (*PostResponse, error) {
-	db := p.db.Get()
+func (p *PostService) CreatePost(ctx context.Context, userID uint, input CreatePostInput) (*PostResponse, error) {
+	db := p.db.Get().WithContext(ctx)
 
 	post := models.Post{
 		Title:    input.Title,
@@ -53,8 +54,8 @@ func (p *PostService) CreatePost(userID uint, input CreatePostInput) (*PostRespo
 	return MapPostToResponse(post), nil
 }
 
-func (p *PostService) GetPost(postID uint) (*PostResponse, error) {
-	db := p.db.Get()
+func (p *PostService) GetPost(ctx context.Context, postID uint) (*PostResponse, error) {
+	db := p.db.Get().WithContext(ctx)
 
 	var post models.Post
 
@@ -69,29 +70,43 @@ func (p *PostService) GetPost(postID uint) (*PostResponse, error) {
 	return MapPostToResponse(post), nil
 }
 
-func (p *PostService) GetPosts(filter database.Filter) ([]*PostResponse, error) {
-	db := p.db.Get()
+func (p *PostService) GetPosts(ctx context.Context, params FilterParams) (*ListResponse, error) {
+	db := p.db.Get().WithContext(ctx)
 
 	var posts []models.Post
 
-	query := db.Preload("Author").Preload("Entities")
-	query = filter.Apply(query)
+	query := db.Preload("Author").Preload("Entities").
+		Scopes(
+			OrderScope(params.OrderBy, params.Sort),
+			PaginationScope(params.Limit, params.Offset),
+		)
 
 	err := query.Find(&posts).Error
 	if err != nil {
 		return nil, err
 	}
 
-	return MapPostsToResponse(posts), nil
+	var total int64
+	if err := db.Model(&posts).Count(&total).Error; err != nil {
+		return nil, err
+	}
+
+	result := MapPostsToResponse(posts)
+	listResponse := &ListResponse{
+		Total:  total,
+		Result: result,
+	}
+
+	return listResponse, nil
 }
 
-func (p *PostService) UpdatePost(userID uint, postID uint, input CreatePostInput) (*PostResponse, error) {
-	db := p.db.Get()
+func (p *PostService) UpdatePost(ctx context.Context, userID uint, postID uint, input CreatePostInput) (*PostResponse, error) {
+	db := p.db.Get().WithContext(ctx)
 
 	err := db.Transaction(func(tx *gorm.DB) error {
 		var post models.Post
 		if err := tx.Preload("Author").First(&post, postID).Error; err != nil {
-			if goerrors.Is(err, gorm.ErrRecordNotFound) {
+			if goerrors.Is(err, database.ErrRecordNotFound) {
 				return errors.ErrNotFound
 			}
 			return err
@@ -143,12 +158,12 @@ func (p *PostService) UpdatePost(userID uint, postID uint, input CreatePostInput
 	return MapPostToResponse(updatedPost), nil
 }
 
-func (p *PostService) DeletePost(userID uint, postID uint) error {
-	db := p.db.Get()
+func (p *PostService) DeletePost(ctx context.Context, userID uint, postID uint) error {
+	db := p.db.Get().WithContext(ctx)
 
 	var post models.Post
 	if err := db.First(&post, postID).Error; err != nil {
-		if goerrors.Is(err, gorm.ErrRecordNotFound) {
+		if goerrors.Is(err, database.ErrRecordNotFound) {
 			return errors.ErrNotFound
 		}
 		return err

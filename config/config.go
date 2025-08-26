@@ -11,10 +11,10 @@ import (
 type Config struct {
 	SecretKey string `validate:"required"`
 
-	ServerConfig   `validate:"required"`
-	DatabaseConfig `validate:"required"`
-	JwtConfig      `validate:"required"`
-	RedisConfig    `validate:"required"`
+	ServerConfig   ServerConfig   `validate:"required"`
+	DatabaseConfig DatabaseConfig `validate:"required"`
+	JwtConfig      JwtConfig      `validate:"required"`
+	RedisConfig    RedisConfig    `validate:"required"`
 }
 
 func MustGet() *Config {
@@ -40,15 +40,15 @@ func Get() (*Config, error) {
 	config := &Config{
 		SecretKey: v.GetString("SECRET_KEY"),
 		ServerConfig: ServerConfig{
-			ServerHost: v.GetString("SERVER_HOST"),
-			ServerPort: v.GetString("SERVER_PORT"),
+			Host: v.GetString("SERVER_HOST"),
+			Port: v.GetString("SERVER_PORT"),
 		},
 		DatabaseConfig: DatabaseConfig{
-			DbHost:     v.GetString("DB_HOST"),
-			DbUser:     v.GetString("DB_USER"),
-			DbPassword: v.GetString("DB_PASSWORD"),
-			DbName:     v.GetString("DB_NAME"),
-			DbPort:     v.GetString("DB_PORT"),
+			Host:     v.GetString("DB_HOST"),
+			User:     v.GetString("DB_USER"),
+			Password: v.GetString("DB_PASSWORD"),
+			Name:     v.GetString("DB_NAME"),
+			Port:     v.GetString("DB_PORT"),
 
 			SSLMode:  v.GetString("SSL_MODE"),
 			TimeZone: v.GetString("TIME_ZONE"),
@@ -58,8 +58,8 @@ func Get() (*Config, error) {
 			ConnMaxLifetime: v.GetDuration("CONN_MAX_LIFETIME"),
 		},
 		JwtConfig: JwtConfig{
-			JwtAccessTTL:  v.GetDuration("JWT_ACCESS_TTL"),
-			JwtRefreshTTL: v.GetDuration("JWT_REFRESH_TTL"),
+			AccessTTL:  v.GetDuration("JWT_ACCESS_TTL"),
+			RefreshTTL: v.GetDuration("JWT_REFRESH_TTL"),
 		},
 		RedisConfig: RedisConfig{
 			Addr:     v.GetString("REDIS_ADDR"),

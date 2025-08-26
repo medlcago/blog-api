@@ -2,8 +2,8 @@ package users
 
 import (
 	"blog-api/internal/database"
+	"blog-api/internal/jwtmanager"
 	"blog-api/internal/models"
-	"blog-api/pkg/jwtmanager"
 )
 
 type IUserService interface {

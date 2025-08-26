@@ -4,12 +4,13 @@ import (
 	"blog-api/config"
 	"blog-api/internal/auth"
 	"blog-api/internal/database"
+	"blog-api/internal/jwtmanager"
 	"blog-api/internal/middleware"
 	"blog-api/internal/posts"
 	"blog-api/internal/routes"
 	"blog-api/internal/users"
 	"blog-api/pkg/errors"
-	"blog-api/pkg/jwtmanager"
+	"blog-api/pkg/storage"
 	"blog-api/pkg/struct_validator"
 	"context"
 	goerrors "errors"
@@ -26,52 +27,60 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/recover"
 )
 
-type Server struct {
-	app       *fiber.App
-	cfg       *config.Config
-	db        *database.DB
-	validate  *validator.Validate
-	appLogger *log.Logger
+type Dependencies struct {
+	Cfg       *config.Config
+	DB        *database.DB
+	Store     storage.Storage
+	Validate  *validator.Validate
+	AppLogger *log.Logger
 }
 
-func NewServer(cfg *config.Config, db *database.DB, validate *validator.Validate, appLogger *log.Logger) (*Server, error) {
+type Server struct {
+	app *fiber.App
+	*Dependencies
+}
+
+func NewServer(deps *Dependencies) (*Server, error) {
+	if deps == nil {
+		panic("NewServer: deps cannot be nil")
+	}
+
 	app := fiber.New(fiber.Config{
-		StructValidator: struct_validator.New(validate),
+		StructValidator: struct_validator.New(deps.Validate),
 		ErrorHandler:    errors.ErrorHandler,
 	})
 
 	app.Use(logger.New())
 	app.Use(recover.New())
 
-	jwtManager := jwtmanager.NewJWTManager(cfg.SecretKey, cfg.JwtConfig)
-	userService := users.NewUserService(jwtManager, db)
+	jwtManager := jwtmanager.NewJWTManager(deps.Cfg.SecretKey, deps.Cfg.JwtConfig)
+
+	// Services
+	userService := users.NewUserService(jwtManager, deps.DB)
+	authService := auth.NewAuthService(jwtManager, deps.DB, deps.Store.WithNamespace("authService"), deps.AppLogger)
+	postService := posts.NewPostService(deps.DB)
+
 	middlewareManager := middleware.NewManager(jwtManager, userService)
 
-	apiGroup := app.Group("/api")
-
-	// Auth
-	authGroup := apiGroup.Group("/auth")
-	authService := auth.NewAuthService(jwtManager, db)
+	// Handlers
 	authHandler := auth.NewAuthHandler(authService)
-	routes.RegisterAuthRoutes(authGroup, authHandler)
-
-	// Users
-	usersGroup := apiGroup.Group("/users")
 	userHandler := users.NewUserHandler()
-	routes.RegisterUserRoutes(usersGroup, userHandler, middlewareManager)
-
-	// Posts
-	postsGroup := apiGroup.Group("/posts")
-	postService := posts.NewPostService(db)
 	postHandler := posts.NewPostHandler(postService)
+
+	// Groups
+	apiGroup := app.Group("/api")
+	authGroup := apiGroup.Group("/auth")
+	usersGroup := apiGroup.Group("/users")
+	postsGroup := apiGroup.Group("/posts")
+
+	// Routes
+	routes.RegisterAuthRoutes(authGroup, authHandler)
+	routes.RegisterUserRoutes(usersGroup, userHandler, middlewareManager)
 	routes.RegisterPostRoutes(postsGroup, postHandler, middlewareManager)
 
 	return &Server{
-		app:       app,
-		cfg:       cfg,
-		db:        db,
-		validate:  validate,
-		appLogger: appLogger,
+		app:          app,
+		Dependencies: deps,
 	}, nil
 }
 
@@ -81,8 +90,8 @@ func (s *Server) Run() error {
 
 	serverErr := make(chan error, 1)
 	go func() {
-		addr := fmt.Sprintf("%s:%s", s.cfg.ServerConfig.ServerHost, s.cfg.ServerConfig.ServerPort)
-		s.appLogger.Printf("Server starting on %s", addr)
+		addr := fmt.Sprintf("%s:%s", s.Cfg.ServerConfig.Host, s.Cfg.ServerConfig.Port)
+		s.AppLogger.Printf("Server starting on %s", addr)
 		if err := s.app.Listen(addr); err != nil {
 			serverErr <- err
 		}
@@ -90,31 +99,31 @@ func (s *Server) Run() error {
 
 	select {
 	case err1 := <-serverErr:
-		s.appLogger.Printf("Server error: %v", err1)
-		err2 := s.db.Close()
+		s.AppLogger.Printf("Server error: %v", err1)
+		err2 := s.DB.Close()
 		return goerrors.Join(err1, err2)
 
 	case sig := <-shutdownChan:
-		s.appLogger.Printf("Received signal: %v. Shutting down gracefully...", sig)
+		s.AppLogger.Printf("Received signal: %v. Shutting down gracefully...", sig)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
 		if err := s.app.ShutdownWithContext(ctx); err != nil {
 			if goerrors.Is(err, context.DeadlineExceeded) {
-				s.appLogger.Printf("Shutdown timed out after 30 seconds, forcing exit")
+				s.AppLogger.Printf("Shutdown timed out after 30 seconds, forcing exit")
 			} else {
-				s.appLogger.Printf("Error during shutdown: %v", err)
+				s.AppLogger.Printf("Error during shutdown: %v", err)
 			}
 		} else {
-			s.appLogger.Println("Server stopped gracefully")
+			s.AppLogger.Println("Server stopped gracefully")
 		}
 
-		if err := s.db.Close(); err != nil {
-			s.appLogger.Printf("Database close error: %v", err)
+		if err := s.DB.Close(); err != nil {
+			s.AppLogger.Printf("Database close error: %v", err)
 		}
 
-		s.appLogger.Println("Shutdown completed")
+		s.AppLogger.Println("Shutdown completed")
 		return nil
 	}
 }

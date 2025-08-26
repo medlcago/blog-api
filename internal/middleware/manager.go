@@ -1,8 +1,8 @@
 package middleware
 
 import (
+	"blog-api/internal/jwtmanager"
 	"blog-api/internal/users"
-	"blog-api/pkg/jwtmanager"
 )
 
 type Manager struct {

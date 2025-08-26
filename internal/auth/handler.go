@@ -3,6 +3,7 @@ package auth
 import (
 	"blog-api/pkg/errors"
 	"blog-api/pkg/response"
+	"context"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -22,14 +23,14 @@ func NewAuthHandler(authService IAuthService) *AuthHandler {
 	}
 }
 
-func (a AuthHandler) Register(ctx fiber.Ctx) error {
+func (a *AuthHandler) Register(ctx fiber.Ctx) error {
 	var input RegisterUserInput
 
 	if err := ctx.Bind().JSON(&input); err != nil {
 		return errors.ErrInvalidBody
 	}
 
-	res, err := a.authService.Register(input)
+	token, err := a.authService.Register(context.Background(), input)
 	if err != nil {
 		return err
 	}
@@ -37,19 +38,19 @@ func (a AuthHandler) Register(ctx fiber.Ctx) error {
 	return ctx.Status(201).JSON(response.Response[*TokenResponse]{
 		OK:   true,
 		Msg:  "User registered!",
-		Data: res,
+		Data: token,
 	})
 
 }
 
-func (a AuthHandler) Login(ctx fiber.Ctx) error {
+func (a *AuthHandler) Login(ctx fiber.Ctx) error {
 	var input LoginUserInput
 
 	if err := ctx.Bind().JSON(&input); err != nil {
 		return errors.ErrInvalidBody
 	}
 
-	res, err := a.authService.Login(input)
+	token, err := a.authService.Login(context.Background(), input)
 	if err != nil {
 		return err
 	}
@@ -57,6 +58,6 @@ func (a AuthHandler) Login(ctx fiber.Ctx) error {
 	return ctx.JSON(response.Response[*TokenResponse]{
 		OK:   true,
 		Msg:  "User logged in!",
-		Data: res,
+		Data: token,
 	})
 }
