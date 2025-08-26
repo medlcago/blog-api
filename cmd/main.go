@@ -33,7 +33,7 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
-	if err := rdb.Ping(ctx); err != nil {
+	if err := rdb.Ping(ctx).Err(); err != nil {
 		appLogger.Fatalf("failed to connect to redis: %v", err)
 	}
 
