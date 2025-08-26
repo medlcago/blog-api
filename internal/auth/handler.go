@@ -11,6 +11,7 @@ import (
 type IAuthHandler interface {
 	Register(ctx fiber.Ctx) error
 	Login(ctx fiber.Ctx) error
+	RefreshToken(ctx fiber.Ctx) error
 }
 
 type AuthHandler struct {
@@ -59,5 +60,24 @@ func (a *AuthHandler) Login(ctx fiber.Ctx) error {
 		OK:   true,
 		Msg:  "User logged in!",
 		Data: token,
+	})
+}
+
+func (a *AuthHandler) RefreshToken(ctx fiber.Ctx) error {
+	var input RefreshTokenInput
+
+	if err := ctx.Bind().JSON(&input); err != nil {
+		return errors.ErrInvalidBody
+	}
+
+	res, err := a.authService.RefreshToken(context.Background(), input)
+	if err != nil {
+		return err
+	}
+
+	return ctx.JSON(response.Response[*TokenResponse]{
+		OK:   true,
+		Msg:  "Token refreshed!",
+		Data: res,
 	})
 }

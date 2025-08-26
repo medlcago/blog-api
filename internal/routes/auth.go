@@ -9,4 +9,5 @@ import (
 func RegisterAuthRoutes(r fiber.Router, h auth.IAuthHandler) {
 	r.Post("/register", h.Register)
 	r.Post("/login", h.Login)
+	r.Post("/refresh-token", h.RefreshToken)
 }

@@ -19,6 +19,7 @@ import (
 type IAuthService interface {
 	Register(ctx context.Context, input RegisterUserInput) (*TokenResponse, error)
 	Login(ctx context.Context, input LoginUserInput) (*TokenResponse, error)
+	RefreshToken(ctx context.Context, input RefreshTokenInput) (*TokenResponse, error)
 }
 
 type AuthService struct {
@@ -123,4 +124,32 @@ func (a *AuthService) Login(ctx context.Context, input LoginUserInput) (*TokenRe
 
 	userID := strconv.Itoa(int(user.ID))
 	return a.Token(userID)
+}
+
+func (a *AuthService) RefreshToken(ctx context.Context, input RefreshTokenInput) (*TokenResponse, error) {
+	claims, err := a.jwtManager.ValidateToken(input.RefreshToken)
+	if err != nil {
+		return nil, errors.ErrInvalidToken
+	}
+
+	if claims.TokenType != jwtmanager.RefreshToken {
+		return nil, errors.ErrInvalidToken
+	}
+
+	ttl := claims.GetRemainingDuration()
+	if ttl <= 0 {
+		return nil, errors.ErrInvalidToken
+	}
+
+	key := fmt.Sprintf("auth:revoked_token:%s", claims.ID)
+	exists, err := a.store.Exists(ctx, key)
+	if exists && err == nil {
+		return nil, errors.ErrInvalidToken
+	}
+
+	if err := a.store.Set(ctx, key, "1", ttl); err != nil {
+		return nil, err
+	}
+
+	return a.Token(claims.UserID)
 }
