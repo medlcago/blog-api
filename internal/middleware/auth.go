@@ -4,18 +4,19 @@ import (
 	"blog-api/pkg/errors"
 	"blog-api/pkg/jwtmanager"
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v3"
 )
 
 func (m *Manager) AuthMiddleware() fiber.Handler {
 	return func(ctx fiber.Ctx) error {
-		token := fiber.GetReqHeader[string](ctx, "Authorization")
-		if token == "" {
+		tokenHeader := fiber.GetReqHeader[string](ctx, "Authorization")
+		if len(tokenHeader) < 7 || !strings.EqualFold(tokenHeader[:7], "bearer ") {
 			return errors.ErrMissingToken
 		}
 
-		claims, err := m.jwtManager.ValidateToken(token)
+		claims, err := m.jwtManager.ValidateToken(tokenHeader[7:])
 		if err != nil {
 			return errors.ErrUnauthorized
 		}
