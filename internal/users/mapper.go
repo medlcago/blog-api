@@ -8,5 +8,6 @@ func MapUserToResponse(user models.User) *UserResponse {
 		Username: user.Username,
 		Email:    user.Email.String,
 		Deleted:  user.DeletedAt.Valid,
+		Avatar:   user.Avatar.String,
 	}
 }

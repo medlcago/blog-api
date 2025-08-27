@@ -44,6 +44,28 @@ services:
       - app
     restart: always
 
+  minio:
+    image: quay.io/minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    env_file:
+      - .env
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_ACCESS_KEY}
+      MINIO_DEFAULT_BUCKETS: "usercontent"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: always
+
 volumes:
   postgres_data:
   redis_data:
+  minio_data:

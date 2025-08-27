@@ -5,4 +5,5 @@ type UserResponse struct {
 	Username string `json:"username"`
 	Email    string `json:"email"`
 	Deleted  bool   `json:"deleted"`
+	Avatar   string `json:"avatar"`
 }

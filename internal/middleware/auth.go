@@ -3,6 +3,7 @@ package middleware
 import (
 	"blog-api/internal/jwtmanager"
 	"blog-api/pkg/errors"
+	"context"
 	"strconv"
 	"strings"
 
@@ -30,7 +31,7 @@ func (m *Manager) AuthMiddleware() fiber.Handler {
 			return errors.ErrUnauthorized
 		}
 
-		user, err := m.userService.GetUserByID(uint(userID))
+		user, err := m.userService.GetUserByID(context.Background(), uint(userID))
 		if err != nil {
 			return errors.ErrUnauthorized
 		}

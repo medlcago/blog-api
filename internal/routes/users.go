@@ -9,4 +9,5 @@ import (
 
 func RegisterUserRoutes(r fiber.Router, h users.IUserHandler, mw *middleware.Manager) {
 	r.Get("/me", mw.AuthMiddleware(), h.GetMe)
+	r.Post("/avatar", mw.AuthMiddleware(), h.UploadAvatar)
 }

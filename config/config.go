@@ -15,6 +15,7 @@ type Config struct {
 	DatabaseConfig DatabaseConfig `validate:"required"`
 	JwtConfig      JwtConfig      `validate:"required"`
 	RedisConfig    RedisConfig    `validate:"required"`
+	MinioConfig    MinioConfig    `validate:"required"`
 }
 
 func MustGet() *Config {
@@ -66,6 +67,13 @@ func Get() (*Config, error) {
 			Password: v.GetString("REDIS_PASSWORD"),
 			DB:       v.GetInt("REDIS_DB"),
 		},
+		MinioConfig: MinioConfig{
+			Endpoint:        v.GetString("MINIO_ENDPOINT"),
+			AccessKeyID:     v.GetString("MINIO_ACCESS_KEY_ID"),
+			SecretAccessKey: v.GetString("MINIO_SECRET_ACCESS_KEY"),
+			UseSSL:          v.GetBool("MINIO_USE_SSL"),
+			Bucket:          v.GetString("MINIO_BUCKET"),
+		},
 	}
 
 	if err := validateConfig(config); err != nil {
@@ -92,6 +100,10 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("REDIS_ADDR", "127.0.0.1:6379")
 	v.SetDefault("REDIS_PASSWORD", "")
 	v.SetDefault("REDIS_DB", 0)
+
+	v.SetDefault("MINIO_ENDPOINT", "127.0.0.1:9000")
+	v.SetDefault("MINIO_USE_SSL", false)
+	v.SetDefault("MINIO_BUCKET", "usercontent")
 }
 
 func validateConfig(cfg *Config) error {

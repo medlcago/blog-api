@@ -4,10 +4,11 @@ import (
 	"blog-api/internal/database"
 	"blog-api/internal/jwtmanager"
 	"blog-api/internal/models"
+	"context"
 )
 
 type IUserService interface {
-	GetUserByID(userID uint) (*UserResponse, error)
+	GetUserByID(ctx context.Context, userID uint) (*UserResponse, error)
 }
 
 type UserService struct {
@@ -22,8 +23,8 @@ func NewUserService(jwtManager *jwtmanager.JWTManager, db *database.DB) IUserSer
 	}
 }
 
-func (s *UserService) GetUserByID(userID uint) (*UserResponse, error) {
-	db := s.db.Get()
+func (s *UserService) GetUserByID(ctx context.Context, userID uint) (*UserResponse, error) {
+	db := s.db.Get().WithContext(ctx)
 
 	var user models.User
 	if err := db.First(&user, userID).Error; err != nil {

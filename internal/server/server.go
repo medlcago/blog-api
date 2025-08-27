@@ -6,8 +6,10 @@ import (
 	"blog-api/internal/database"
 	"blog-api/internal/jwtmanager"
 	"blog-api/internal/middleware"
+	"blog-api/internal/photos"
 	"blog-api/internal/posts"
 	"blog-api/internal/routes"
+	internalStorage "blog-api/internal/storage"
 	"blog-api/internal/users"
 	"blog-api/pkg/errors"
 	"blog-api/pkg/storage"
@@ -28,11 +30,12 @@ import (
 )
 
 type Dependencies struct {
-	Cfg       *config.Config
-	DB        *database.DB
-	Store     storage.Storage
-	Validate  *validator.Validate
-	AppLogger *log.Logger
+	Cfg         *config.Config
+	DB          *database.DB
+	Store       storage.Storage
+	MinioClient *internalStorage.MinioClient
+	Validate    *validator.Validate
+	AppLogger   *log.Logger
 }
 
 type Server struct {
@@ -55,16 +58,19 @@ func NewServer(deps *Dependencies) (*Server, error) {
 
 	jwtManager := jwtmanager.NewJWTManager(deps.Cfg.SecretKey, deps.Cfg.JwtConfig)
 
+	photoProcessor := photos.NewProcessor(5*1024*1024, []string{"jpeg", "png"})
+
 	// Services
 	userService := users.NewUserService(jwtManager, deps.DB)
 	authService := auth.NewAuthService(jwtManager, deps.DB, deps.Store.WithNamespace("authService"), deps.AppLogger)
 	postService := posts.NewPostService(deps.DB)
+	photoService := photos.NewPhotoService(deps.DB, deps.MinioClient, photoProcessor)
 
 	middlewareManager := middleware.NewManager(jwtManager, userService)
 
 	// Handlers
 	authHandler := auth.NewAuthHandler(authService)
-	userHandler := users.NewUserHandler()
+	userHandler := users.NewUserHandler(photoService)
 	postHandler := posts.NewPostHandler(postService)
 
 	// Groups
