@@ -4,9 +4,9 @@ import (
 	"blog-api/internal/database"
 	"blog-api/internal/jwtmanager"
 	"blog-api/internal/models"
+	"blog-api/internal/storage"
 	"blog-api/pkg/errors"
 	"blog-api/pkg/password"
-	"blog-api/pkg/storage"
 	"context"
 	goerrors "errors"
 	"fmt"
@@ -25,15 +25,15 @@ type IAuthService interface {
 type AuthService struct {
 	jwtManager *jwtmanager.JWTManager
 	db         *database.DB
-	store      storage.Storage
+	redis      *storage.RedisClient
 	appLogger  *log.Logger
 }
 
-func NewAuthService(jwtManager *jwtmanager.JWTManager, db *database.DB, store storage.Storage, appLogger *log.Logger) *AuthService {
+func NewAuthService(jwtManager *jwtmanager.JWTManager, db *database.DB, redis *storage.RedisClient, appLogger *log.Logger) IAuthService {
 	return &AuthService{
 		jwtManager: jwtManager,
 		db:         db,
-		store:      store,
+		redis:      redis,
 		appLogger:  appLogger,
 	}
 }
@@ -61,10 +61,10 @@ func (a *AuthService) Register(ctx context.Context, input RegisterUserInput) (*T
 	key := fmt.Sprintf("auth:register_attempt:%s", normalizedUsername)
 	ttl := 24 * 7 * time.Hour
 
-	exists, err := a.store.Exists(ctx, key)
+	exists, err := a.redis.Client.Exists(ctx, key).Result()
 	if err != nil {
-		a.appLogger.Printf("storage check failed: %v", err)
-	} else if exists {
+		a.appLogger.Printf("redis check failed for key %s: %v", key, err)
+	} else if exists == 1 {
 		return nil, errors.ErrUsernameAlreadyExists
 	}
 
@@ -72,8 +72,8 @@ func (a *AuthService) Register(ctx context.Context, input RegisterUserInput) (*T
 	err = db.Where("LOWER(username) = LOWER(?)", input.Username).First(&user).Error
 
 	if err == nil {
-		if err := a.store.Set(ctx, key, true, ttl); err != nil {
-			a.appLogger.Printf("failed to storage username existence: %v", err)
+		if err := a.redis.Client.Set(ctx, key, true, ttl).Err(); err != nil {
+			a.appLogger.Printf("failed to set redis key %s: %v", key, err)
 		}
 		return nil, errors.ErrUsernameAlreadyExists
 	}
@@ -101,8 +101,8 @@ func (a *AuthService) Register(ctx context.Context, input RegisterUserInput) (*T
 		return nil, err
 	}
 
-	if err := a.store.Set(ctx, key, true, ttl); err != nil {
-		a.appLogger.Printf("failed to storage registration: %v", err)
+	if err := a.redis.Client.Set(ctx, key, true, ttl).Err(); err != nil {
+		a.appLogger.Printf("failed to set redis key %s: %v", key, err)
 	}
 
 	return token, nil
@@ -142,12 +142,12 @@ func (a *AuthService) RefreshToken(ctx context.Context, input RefreshTokenInput)
 	}
 
 	key := fmt.Sprintf("auth:revoked_token:%s", claims.ID)
-	exists, err := a.store.Exists(ctx, key)
-	if exists && err == nil {
+	exists, err := a.redis.Client.Exists(ctx, key).Result()
+	if exists == 1 && err == nil {
 		return nil, errors.ErrInvalidToken
 	}
 
-	if err := a.store.Set(ctx, key, "1", ttl); err != nil {
+	if err := a.redis.Client.Set(ctx, key, "1", ttl).Err(); err != nil {
 		return nil, err
 	}
 

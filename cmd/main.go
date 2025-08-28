@@ -6,7 +6,6 @@ import (
 	"blog-api/internal/server"
 	"blog-api/internal/storage"
 	appvalidator "blog-api/internal/validator"
-	redisStore "blog-api/pkg/storage/redis"
 	"log"
 	"os"
 	"time"
@@ -23,14 +22,9 @@ func main() {
 
 	cfg := config.MustGet()
 
-	rdb, err := storage.NewRedisClient(cfg.RedisConfig)
+	redisClient, err := storage.NewRedisClient(cfg.RedisConfig)
 	if err != nil {
 		appLogger.Fatalf("failed to init redis client: %v", err)
-	}
-
-	store, err := redisStore.New(rdb.Client, nil)
-	if err != nil {
-		appLogger.Fatalf("failed to init store: %v", err)
 	}
 
 	minioClient, err := storage.NewMinioClient(cfg.MinioConfig)
@@ -56,7 +50,7 @@ func main() {
 	serverDeps := &server.Dependencies{
 		Cfg:         cfg,
 		DB:          db,
-		Store:       store,
+		RedisClient: redisClient,
 		MinioClient: minioClient,
 		Validate:    validate,
 		AppLogger:   appLogger,

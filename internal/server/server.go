@@ -9,10 +9,9 @@ import (
 	"blog-api/internal/photos"
 	"blog-api/internal/posts"
 	"blog-api/internal/routes"
-	internalStorage "blog-api/internal/storage"
+	"blog-api/internal/storage"
 	"blog-api/internal/users"
 	"blog-api/pkg/errors"
-	"blog-api/pkg/storage"
 	"blog-api/pkg/struct_validator"
 	"context"
 	goerrors "errors"
@@ -32,8 +31,8 @@ import (
 type Dependencies struct {
 	Cfg         *config.Config
 	DB          *database.DB
-	Store       storage.Storage
-	MinioClient *internalStorage.MinioClient
+	RedisClient *storage.RedisClient
+	MinioClient *storage.MinioClient
 	Validate    *validator.Validate
 	AppLogger   *log.Logger
 }
@@ -62,7 +61,7 @@ func NewServer(deps *Dependencies) (*Server, error) {
 
 	// Services
 	userService := users.NewUserService(jwtManager, deps.DB)
-	authService := auth.NewAuthService(jwtManager, deps.DB, deps.Store.WithNamespace("authService"), deps.AppLogger)
+	authService := auth.NewAuthService(jwtManager, deps.DB, deps.RedisClient, deps.AppLogger)
 	postService := posts.NewPostService(deps.DB)
 	photoService := photos.NewPhotoService(deps.DB, deps.MinioClient, photoProcessor)
 
