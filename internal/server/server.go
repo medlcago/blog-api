@@ -50,6 +50,7 @@ func NewServer(deps *Dependencies) (*Server, error) {
 	app := fiber.New(fiber.Config{
 		StructValidator: struct_validator.New(deps.Validate),
 		ErrorHandler:    errors.ErrorHandler,
+		BodyLimit:       10 << 20,
 	})
 
 	app.Use(logger.New())
@@ -57,13 +58,11 @@ func NewServer(deps *Dependencies) (*Server, error) {
 
 	jwtManager := jwtmanager.NewJWTManager(deps.Cfg.SecretKey, deps.Cfg.JwtConfig)
 
-	photoProcessor := photos.NewProcessor(5*1024*1024, []string{"jpeg", "png"})
-
 	// Services
 	userService := users.NewUserService(jwtManager, deps.DB)
 	authService := auth.NewAuthService(jwtManager, deps.DB, deps.RedisClient, deps.AppLogger)
 	postService := posts.NewPostService(deps.DB)
-	photoService := photos.NewPhotoService(deps.DB, deps.MinioClient, photoProcessor)
+	photoService := photos.NewPhotoService(deps.DB, deps.MinioClient)
 
 	middlewareManager := middleware.NewManager(jwtManager, userService)
 

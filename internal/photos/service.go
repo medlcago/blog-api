@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"mime/multipart"
-	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,21 +18,19 @@ type IPhotoService interface {
 	UploadAvatar(ctx context.Context, userID uint, file *multipart.FileHeader) (*UploadAvatarResponse, error)
 }
 type PhotoService struct {
-	db        *database.DB
-	minio     *storage.MinioClient
-	processor *Processor
+	db    *database.DB
+	minio *storage.MinioClient
 }
 
-func NewPhotoService(db *database.DB, minio *storage.MinioClient, processor *Processor) IPhotoService {
+func NewPhotoService(db *database.DB, minio *storage.MinioClient) IPhotoService {
 	return &PhotoService{
-		db:        db,
-		minio:     minio,
-		processor: processor,
+		db:    db,
+		minio: minio,
 	}
 }
 
 func (s *PhotoService) UploadAvatar(ctx context.Context, userID uint, file *multipart.FileHeader) (*UploadAvatarResponse, error) {
-	if err := s.processor.Validate(file); err != nil {
+	if err := ValidateAvatar(file); err != nil {
 		return nil, errors.New(400, err.Error())
 	}
 
@@ -43,8 +40,8 @@ func (s *PhotoService) UploadAvatar(ctx context.Context, userID uint, file *mult
 	}
 	defer src.Close()
 
-	ext := filepath.Ext(file.Filename)
-	filename := fmt.Sprintf("%s_%d_%d%s", uuid.New(), time.Now().UTC().UnixNano(), userID, ext)
+	ext := GetFileExt(file.Filename)
+	filename := fmt.Sprintf("avatars/%d/%s_%d%s", userID, uuid.NewString(), time.Now().UTC().UnixNano(), ext)
 	url := fmt.Sprintf("http://%s/%s/%s", s.minio.Client.EndpointURL().Host, s.minio.Bucket, filename)
 
 	db := s.db.Get().WithContext(ctx)
