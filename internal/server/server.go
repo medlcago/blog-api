@@ -128,6 +128,10 @@ func (s *Server) Run() error {
 			s.AppLogger.Printf("Database close error: %v", err)
 		}
 
+		if err := s.RedisClient.Client.Close(); err != nil {
+			s.AppLogger.Printf("Redis close error: %v", err)
+		}
+
 		s.AppLogger.Println("Shutdown completed")
 		return nil
 	}
