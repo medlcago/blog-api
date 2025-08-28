@@ -25,10 +25,7 @@ func NewUserHandler(photoService photos.IPhotoService) IUserHandler {
 }
 
 func (u *UserHandler) GetMe(ctx fiber.Ctx) error {
-	user := fiber.Locals[*UserResponse](ctx, "user")
-	if user == nil {
-		return errors.ErrUnauthorized
-	}
+	user := MustGetUser(ctx)
 
 	return ctx.JSON(response.Response[*UserResponse]{
 		OK:   true,
@@ -37,10 +34,7 @@ func (u *UserHandler) GetMe(ctx fiber.Ctx) error {
 }
 
 func (u *UserHandler) UploadAvatar(ctx fiber.Ctx) error {
-	user := fiber.Locals[*UserResponse](ctx, "user")
-	if user == nil {
-		return errors.ErrUnauthorized
-	}
+	user := MustGetUser(ctx)
 
 	file, err := ctx.FormFile("file")
 	if err != nil {

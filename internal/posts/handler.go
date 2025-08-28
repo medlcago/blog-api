@@ -28,10 +28,7 @@ func NewPostHandler(postService IPostService) IPostHandler {
 }
 
 func (h *PostHandler) CreatePost(ctx fiber.Ctx) error {
-	user := fiber.Locals[*users.UserResponse](ctx, "user")
-	if user == nil {
-		return errors.ErrUnauthorized
-	}
+	user := users.MustGetUser(ctx)
 
 	var input CreatePostInput
 
@@ -77,10 +74,7 @@ func (h *PostHandler) GetPosts(ctx fiber.Ctx) error {
 }
 
 func (h *PostHandler) UpdatePost(ctx fiber.Ctx) error {
-	user := fiber.Locals[*users.UserResponse](ctx, "user")
-	if user == nil {
-		return errors.ErrUnauthorized
-	}
+	user := users.MustGetUser(ctx)
 
 	var input CreatePostInput
 	if err := ctx.Bind().Body(&input); err != nil {
@@ -100,10 +94,7 @@ func (h *PostHandler) UpdatePost(ctx fiber.Ctx) error {
 }
 
 func (h *PostHandler) DeletePost(ctx fiber.Ctx) error {
-	user := fiber.Locals[*users.UserResponse](ctx, "user")
-	if user == nil {
-		return errors.ErrUnauthorized
-	}
+	user := users.MustGetUser(ctx)
 
 	postID := fiber.Params[uint](ctx, "id")
 	if err := h.postService.DeletePost(context.Background(), user.UserID, postID); err != nil {
