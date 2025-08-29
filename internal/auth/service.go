@@ -2,15 +2,16 @@ package auth
 
 import (
 	"blog-api/internal/database"
-	"blog-api/internal/jwtmanager"
+	"blog-api/internal/logger"
 	"blog-api/internal/models"
 	"blog-api/internal/storage"
+	"blog-api/internal/tokenmanager"
 	"blog-api/pkg/errors"
 	"blog-api/pkg/password"
 	"context"
 	goerrors "errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -23,24 +24,24 @@ type IAuthService interface {
 }
 
 type AuthService struct {
-	jwtManager *jwtmanager.JWTManager
+	jwtService tokenmanager.JWTService
 	db         *database.DB
 	redis      *storage.RedisClient
-	appLogger  *log.Logger
+	logger     *slog.Logger
 }
 
-func NewAuthService(jwtManager *jwtmanager.JWTManager, db *database.DB, redis *storage.RedisClient, appLogger *log.Logger) IAuthService {
+func NewAuthService(jwtService tokenmanager.JWTService, db *database.DB, redis *storage.RedisClient, logger *slog.Logger) IAuthService {
 	return &AuthService{
-		jwtManager: jwtManager,
+		jwtService: jwtService,
 		db:         db,
 		redis:      redis,
-		appLogger:  appLogger,
+		logger:     logger,
 	}
 }
 
 func (a *AuthService) Token(userID string) (*TokenResponse, error) {
-	accessToken, err1 := a.jwtManager.GenerateToken(userID, jwtmanager.AccessToken)
-	refreshToken, err2 := a.jwtManager.GenerateToken(userID, jwtmanager.RefreshToken)
+	accessToken, err1 := a.jwtService.GenerateToken(userID, tokenmanager.AccessToken)
+	refreshToken, err2 := a.jwtService.GenerateToken(userID, tokenmanager.RefreshToken)
 
 	if err := goerrors.Join(err1, err2); err != nil {
 		return nil, err
@@ -48,23 +49,27 @@ func (a *AuthService) Token(userID string) (*TokenResponse, error) {
 
 	return &TokenResponse{
 		AccessToken:           accessToken,
-		AccessTokenExpiresIn:  int(a.jwtManager.AccessTTL().Seconds()),
+		AccessTokenExpiresIn:  int(a.jwtService.AccessTTL().Seconds()),
 		RefreshToken:          refreshToken,
-		RefreshTokenExpiresIn: int(a.jwtManager.RefreshTTL().Seconds()),
+		RefreshTokenExpiresIn: int(a.jwtService.RefreshTTL().Seconds()),
 	}, nil
 }
 
 func (a *AuthService) Register(ctx context.Context, input RegisterUserInput) (*TokenResponse, error) {
 	db := a.db.Get().WithContext(ctx)
+	log := logger.FromCtx(ctx, a.logger).With(slog.String("username", input.Username))
 
 	normalizedUsername := strings.ToLower(strings.TrimSpace(input.Username))
 	key := fmt.Sprintf("auth:register_attempt:%s", normalizedUsername)
 	ttl := 24 * 7 * time.Hour
 
-	exists, err := a.redis.Client.Exists(ctx, key).Result()
+	set, err := a.redis.Client.SetNX(ctx, key, true, ttl).Result()
 	if err != nil {
-		a.appLogger.Printf("redis check failed for key %s: %v", key, err)
-	} else if exists == 1 {
+		log.Error("failed to set redis key", slog.String("key", key), slog.Any("error", err))
+		return nil, err
+	}
+	if !set {
+		log.Info("username already exists in redis")
 		return nil, errors.ErrUsernameAlreadyExists
 	}
 
@@ -72,18 +77,17 @@ func (a *AuthService) Register(ctx context.Context, input RegisterUserInput) (*T
 	err = db.Where("LOWER(username) = LOWER(?)", input.Username).First(&user).Error
 
 	if err == nil {
-		if err := a.redis.Client.Set(ctx, key, true, ttl).Err(); err != nil {
-			a.appLogger.Printf("failed to set redis key %s: %v", key, err)
-		}
+		log.Info("username already exists in database")
 		return nil, errors.ErrUsernameAlreadyExists
 	}
-
 	if !goerrors.Is(err, database.ErrRecordNotFound) {
+		log.Error("database query failed", slog.Any("error", err))
 		return nil, err
 	}
 
 	hashedPassword, err := password.HashPassword(input.Password)
 	if err != nil {
+		log.Error("password hashing failed", slog.Any("error", err))
 		return nil, err
 	}
 
@@ -91,18 +95,17 @@ func (a *AuthService) Register(ctx context.Context, input RegisterUserInput) (*T
 		Username: input.Username,
 		Password: hashedPassword,
 	}
+
 	if err = db.Create(&user).Error; err != nil {
+		log.Error("user creation failed", slog.Any("error", err))
 		return nil, err
 	}
 
 	userID := strconv.Itoa(int(user.ID))
 	token, err := a.Token(userID)
 	if err != nil {
+		log.Error("failed to generate token", slog.Any("error", err))
 		return nil, err
-	}
-
-	if err := a.redis.Client.Set(ctx, key, true, ttl).Err(); err != nil {
-		a.appLogger.Printf("failed to set redis key %s: %v", key, err)
 	}
 
 	return token, nil
@@ -111,45 +114,77 @@ func (a *AuthService) Register(ctx context.Context, input RegisterUserInput) (*T
 
 func (a *AuthService) Login(ctx context.Context, input LoginUserInput) (*TokenResponse, error) {
 	db := a.db.Get().WithContext(ctx)
+	log := logger.FromCtx(ctx, a.logger).With(slog.String("username", input.Username))
 
 	var user models.User
 
 	if err := db.Where("LOWER(username) = LOWER(?)", input.Username).First(&user).Error; err != nil {
+		if !goerrors.Is(err, database.ErrRecordNotFound) {
+			log.Error("database query failed", slog.Any("error", err))
+			return nil, err
+		}
+
+		log.Info("user not found in database")
 		return nil, errors.ErrInvalidCredentials
 	}
 
 	if !password.CheckPasswordHash(input.Password, user.Password) {
+		log.Info("invalid password provided")
 		return nil, errors.ErrInvalidCredentials
 	}
 
 	userID := strconv.Itoa(int(user.ID))
-	return a.Token(userID)
+	token, err := a.Token(userID)
+	if err != nil {
+		log.Error("failed to generate token", slog.Any("error", err))
+		return nil, err
+	}
+
+	return token, nil
 }
 
 func (a *AuthService) RefreshToken(ctx context.Context, input RefreshTokenInput) (*TokenResponse, error) {
-	claims, err := a.jwtManager.ValidateToken(input.RefreshToken)
+	log := logger.FromCtx(ctx, a.logger)
+
+	claims, err := a.jwtService.ValidateToken(input.RefreshToken)
 	if err != nil {
+		log.Info("invalid token provided", slog.Any("error", err))
 		return nil, errors.ErrInvalidToken
 	}
 
-	if claims.TokenType != jwtmanager.RefreshToken {
+	if claims.TokenType != tokenmanager.RefreshToken {
+		log.Info("wrong token type provided",
+			slog.String("expected", tokenmanager.RefreshToken),
+			slog.String("got", claims.TokenType),
+		)
 		return nil, errors.ErrInvalidToken
 	}
 
 	ttl := claims.GetRemainingDuration()
 	if ttl <= 0 {
+		log.Info("token has expired")
 		return nil, errors.ErrInvalidToken
 	}
 
 	key := fmt.Sprintf("auth:revoked_token:%s", claims.ID)
-	exists, err := a.redis.Client.Exists(ctx, key).Result()
-	if exists == 1 && err == nil {
-		return nil, errors.ErrInvalidToken
-	}
-
-	if err := a.redis.Client.Set(ctx, key, "1", ttl).Err(); err != nil {
+	set, err := a.redis.Client.SetNX(ctx, key, "1", ttl).Result()
+	if err != nil {
+		log.Error("failed to set redis key", slog.String("key", key), slog.Any("error", err))
 		return nil, err
 	}
 
-	return a.Token(claims.UserID)
+	if !set {
+		log.Info("token has already been revoked")
+		return nil, errors.ErrInvalidToken
+	}
+
+	log.Info("token revoked successfully", slog.String("token_id", claims.ID))
+
+	token, err := a.Token(claims.UserID)
+	if err != nil {
+		log.Error("failed to generate new token", slog.Any("error", err))
+		return nil, err
+	}
+
+	return token, err
 }

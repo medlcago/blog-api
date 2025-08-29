@@ -3,10 +3,11 @@ package main
 import (
 	"blog-api/config"
 	"blog-api/internal/database"
+	"blog-api/internal/logger"
 	"blog-api/internal/server"
 	"blog-api/internal/storage"
 	appvalidator "blog-api/internal/validator"
-	"log"
+	"log/slog"
 	"os"
 	"time"
 )
@@ -16,35 +17,40 @@ func init() {
 }
 
 func main() {
-	appLogger := log.New(os.Stderr, "APP: ", log.Ldate|log.Ltime|log.Lshortfile)
-
-	appLogger.Println("Starting application initialization...")
-
 	cfg := config.MustGet()
+
+	log := logger.New(logger.Env(cfg.Env))
+
+	log.Info("Starting application initialization...")
 
 	redisClient, err := storage.NewRedisClient(cfg.RedisConfig)
 	if err != nil {
-		appLogger.Fatalf("failed to init redis client: %v", err)
+		log.Error("failed to init redis client", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	minioClient, err := storage.NewMinioClient(cfg.MinioConfig)
 	if err != nil {
-		appLogger.Fatalf("failed to create minio client: %v", err)
+		log.Error("failed to create minio client", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	db, err := database.New(cfg.DatabaseConfig)
 	if err != nil {
-		appLogger.Fatalf("failed to init database: %v", err)
+		log.Error("failed to init database", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	if err = db.RunMigrations(); err != nil {
-		appLogger.Fatalf("failed to run database migrations: %v", err)
+		log.Error("failed to run database migrations", slog.Any("error", err))
+		os.Exit(1)
 	}
-	appLogger.Println("✅ Database migrations completed")
+	log.Info("✅ Database migrations completed")
 
-	validate, err := appvalidator.New()
+	validator, err := appvalidator.New()
 	if err != nil {
-		appLogger.Fatalf("failed to init validator: %v", err)
+		log.Error("failed to init validator", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	serverDeps := &server.Dependencies{
@@ -52,15 +58,17 @@ func main() {
 		DB:          db,
 		RedisClient: redisClient,
 		MinioClient: minioClient,
-		Validate:    validate,
-		AppLogger:   appLogger,
+		Validator:   validator,
+		Logger:      log,
 	}
 	s, err := server.NewServer(serverDeps)
 	if err != nil {
-		appLogger.Fatalf("failed to init server: %v", err)
+		log.Error("failed to init server", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	if err := s.Run(); err != nil {
-		appLogger.Fatalf("server stopped with error: %v", err)
+		log.Error("server stopped with error", slog.Any("error", err))
+		os.Exit(1)
 	}
 }

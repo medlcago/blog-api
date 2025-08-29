@@ -10,6 +10,7 @@ import (
 
 type Config struct {
 	SecretKey string `validate:"required"`
+	Env       string `validate:"required,oneof=local dev prod"`
 
 	ServerConfig   ServerConfig   `validate:"required"`
 	DatabaseConfig DatabaseConfig `validate:"required"`
@@ -40,9 +41,13 @@ func Get() (*Config, error) {
 
 	config := &Config{
 		SecretKey: v.GetString("SECRET_KEY"),
+		Env:       v.GetString("APP_ENV"),
 		ServerConfig: ServerConfig{
-			Host: v.GetString("SERVER_HOST"),
-			Port: v.GetString("SERVER_PORT"),
+			Host:            v.GetString("SERVER_HOST"),
+			Port:            v.GetString("SERVER_PORT"),
+			ReadTimeout:     v.GetDuration("SERVER_READ_TIMEOUT"),
+			WriteTimeout:    v.GetDuration("SERVER_WRITE_TIMEOUT"),
+			ShutdownTimeout: v.GetDuration("SERVER_SHUTDOWN_TIMEOUT"),
 		},
 		DatabaseConfig: DatabaseConfig{
 			Host:     v.GetString("DB_HOST"),
@@ -84,8 +89,13 @@ func Get() (*Config, error) {
 }
 
 func setDefaults(v *viper.Viper) {
+	v.SetDefault("APP_ENV", "dev")
+
 	v.SetDefault("SERVER_HOST", "0.0.0.0")
 	v.SetDefault("SERVER_PORT", "3000")
+	v.SetDefault("SERVER_READ_TIMEOUT", 5*time.Second)
+	v.SetDefault("SERVER_WRITE_TIMEOUT", 5*time.Second)
+	v.SetDefault("SERVER_SHUTDOWN_TIMEOUT", 30*time.Second)
 
 	v.SetDefault("SSL_MODE", "disable")
 	v.SetDefault("TIME_ZONE", "UTC")

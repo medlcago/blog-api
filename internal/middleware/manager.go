@@ -1,18 +1,21 @@
 package middleware
 
 import (
-	"blog-api/internal/jwtmanager"
+	"blog-api/internal/tokenmanager"
 	"blog-api/internal/users"
+	"log/slog"
 )
 
 type Manager struct {
-	jwtManager  *jwtmanager.JWTManager
+	log         *slog.Logger
+	jwtService  tokenmanager.JWTService
 	userService users.IUserService
 }
 
-func NewManager(jwtManager *jwtmanager.JWTManager, userService users.IUserService) *Manager {
+func NewManager(log *slog.Logger, jwtService tokenmanager.JWTService, userService users.IUserService) *Manager {
 	return &Manager{
-		jwtManager:  jwtManager,
+		log:         log,
+		jwtService:  jwtService,
 		userService: userService,
 	}
 }

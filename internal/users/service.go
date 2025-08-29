@@ -2,7 +2,6 @@ package users
 
 import (
 	"blog-api/internal/database"
-	"blog-api/internal/jwtmanager"
 	"blog-api/internal/models"
 	"context"
 )
@@ -12,14 +11,12 @@ type IUserService interface {
 }
 
 type UserService struct {
-	jwtManager *jwtmanager.JWTManager
-	db         *database.DB
+	db *database.DB
 }
 
-func NewUserService(jwtManager *jwtmanager.JWTManager, db *database.DB) IUserService {
+func NewUserService(db *database.DB) IUserService {
 	return &UserService{
-		jwtManager: jwtManager,
-		db:         db,
+		db: db,
 	}
 }
 

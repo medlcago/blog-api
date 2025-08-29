@@ -1,4 +1,4 @@
-package jwtmanager
+package tokenmanager
 
 import (
 	"time"

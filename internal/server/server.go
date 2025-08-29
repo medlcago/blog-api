@@ -4,28 +4,27 @@ import (
 	"blog-api/config"
 	"blog-api/internal/auth"
 	"blog-api/internal/database"
-	"blog-api/internal/jwtmanager"
 	"blog-api/internal/middleware"
 	"blog-api/internal/photos"
 	"blog-api/internal/posts"
 	"blog-api/internal/routes"
 	"blog-api/internal/storage"
+	"blog-api/internal/tokenmanager"
 	"blog-api/internal/users"
 	"blog-api/pkg/errors"
 	"blog-api/pkg/struct_validator"
 	"context"
 	goerrors "errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v3"
-	"github.com/gofiber/fiber/v3/middleware/logger"
 	"github.com/gofiber/fiber/v3/middleware/recover"
+	"github.com/gofiber/fiber/v3/middleware/requestid"
 )
 
 type Dependencies struct {
@@ -33,8 +32,8 @@ type Dependencies struct {
 	DB          *database.DB
 	RedisClient *storage.RedisClient
 	MinioClient *storage.MinioClient
-	Validate    *validator.Validate
-	AppLogger   *log.Logger
+	Validator   *validator.Validate
+	Logger      *slog.Logger
 }
 
 type Server struct {
@@ -47,29 +46,34 @@ func NewServer(deps *Dependencies) (*Server, error) {
 		panic("NewServer: deps cannot be nil")
 	}
 
-	app := fiber.New(fiber.Config{
-		StructValidator: struct_validator.New(deps.Validate),
-		ErrorHandler:    errors.ErrorHandler,
-		BodyLimit:       10 << 20,
-	})
-
-	app.Use(logger.New())
-	app.Use(recover.New())
-
-	jwtManager := jwtmanager.NewJWTManager(deps.Cfg.SecretKey, deps.Cfg.JwtConfig)
-
 	// Services
-	userService := users.NewUserService(jwtManager, deps.DB)
-	authService := auth.NewAuthService(jwtManager, deps.DB, deps.RedisClient, deps.AppLogger)
+	jwtService := tokenmanager.NewJWTManager(deps.Cfg.SecretKey, deps.Cfg.JwtConfig)
+	userService := users.NewUserService(deps.DB)
+	authService := auth.NewAuthService(jwtService, deps.DB, deps.RedisClient, deps.Logger)
 	postService := posts.NewPostService(deps.DB)
 	photoService := photos.NewPhotoService(deps.DB, deps.MinioClient)
 
-	middlewareManager := middleware.NewManager(jwtManager, userService)
+	mw := middleware.NewManager(deps.Logger, jwtService, userService)
 
 	// Handlers
-	authHandler := auth.NewAuthHandler(authService)
+	authHandler := auth.NewAuthHandler(authService, deps.Logger)
 	userHandler := users.NewUserHandler(photoService)
 	postHandler := posts.NewPostHandler(postService)
+
+	// App
+	app := fiber.New(fiber.Config{
+		StructValidator: struct_validator.New(deps.Validator),
+		ErrorHandler:    errors.ErrorHandler,
+		BodyLimit:       10 << 20, // TODO:  move body limit to config
+		ReadTimeout:     deps.Cfg.ServerConfig.ReadTimeout,
+		WriteTimeout:    deps.Cfg.ServerConfig.WriteTimeout,
+	})
+
+	app.Use(requestid.New())
+	app.Use(recover.New(recover.Config{
+		EnableStackTrace: true,
+	}))
+	app.Use(mw.LoggerMiddleware())
 
 	// Groups
 	apiGroup := app.Group("/api")
@@ -79,8 +83,8 @@ func NewServer(deps *Dependencies) (*Server, error) {
 
 	// Routes
 	routes.RegisterAuthRoutes(authGroup, authHandler)
-	routes.RegisterUserRoutes(usersGroup, userHandler, middlewareManager)
-	routes.RegisterPostRoutes(postsGroup, postHandler, middlewareManager)
+	routes.RegisterUserRoutes(usersGroup, userHandler, mw)
+	routes.RegisterPostRoutes(postsGroup, postHandler, mw)
 
 	return &Server{
 		app:          app,
@@ -95,7 +99,11 @@ func (s *Server) Run() error {
 	serverErr := make(chan error, 1)
 	go func() {
 		addr := fmt.Sprintf("%s:%s", s.Cfg.ServerConfig.Host, s.Cfg.ServerConfig.Port)
-		s.AppLogger.Printf("Server starting on %s", addr)
+		s.Logger.Info(
+			"starting server",
+			slog.String("addr", addr),
+			slog.String("env", s.Cfg.Env),
+		)
 		if err := s.app.Listen(addr); err != nil {
 			serverErr <- err
 		}
@@ -103,35 +111,38 @@ func (s *Server) Run() error {
 
 	select {
 	case err1 := <-serverErr:
-		s.AppLogger.Printf("Server error: %v", err1)
+		s.Logger.Error("Server error", slog.Any("error", err1))
 		err2 := s.DB.Close()
 		return goerrors.Join(err1, err2)
 
 	case sig := <-shutdownChan:
-		s.AppLogger.Printf("Received signal: %v. Shutting down gracefully...", sig)
+		s.Logger.Info("Received signal. Shutting down gracefully...", slog.String("signal", sig.String()))
 
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), s.Cfg.ServerConfig.ShutdownTimeout)
 		defer cancel()
 
 		if err := s.app.ShutdownWithContext(ctx); err != nil {
 			if goerrors.Is(err, context.DeadlineExceeded) {
-				s.AppLogger.Printf("Shutdown timed out after 30 seconds, forcing exit")
+				s.Logger.Info(
+					"Shutdown timed out, forcing exit",
+					slog.Duration("timeout", s.Cfg.ServerConfig.ShutdownTimeout),
+				)
 			} else {
-				s.AppLogger.Printf("Error during shutdown: %v", err)
+				s.Logger.Info("Error during shutdown", slog.Any("error", err))
 			}
 		} else {
-			s.AppLogger.Println("Server stopped gracefully")
+			s.Logger.Info("Server stopped gracefully")
 		}
 
 		if err := s.DB.Close(); err != nil {
-			s.AppLogger.Printf("Database close error: %v", err)
+			s.Logger.Error("Database close error", slog.Any("error", err))
 		}
 
 		if err := s.RedisClient.Client.Close(); err != nil {
-			s.AppLogger.Printf("Redis close error: %v", err)
+			s.Logger.Error("Redis close error", slog.Any("error", err))
 		}
 
-		s.AppLogger.Println("Shutdown completed")
+		s.Logger.Info("Shutdown completed")
 		return nil
 	}
 }
