@@ -1,9 +1,9 @@
 package middleware
 
 import (
+	"blog-api/internal/errors"
 	"blog-api/internal/logger"
 	"blog-api/internal/tokenmanager"
-	"blog-api/pkg/errors"
 	"context"
 	"log/slog"
 	"strconv"
@@ -17,8 +17,9 @@ func (m *Manager) AuthMiddleware() fiber.Handler {
 	log := m.log.With(slog.String("component", "middleware/auth"))
 
 	return func(ctx fiber.Ctx) error {
+		requestID := requestid.FromContext(ctx)
 		log = log.With(
-			slog.String(string(logger.RequestIDKey), requestid.FromContext(ctx)),
+			slog.String(string(logger.RequestIDKey), requestID),
 		)
 
 		tokenHeader := fiber.GetReqHeader[string](ctx, "Authorization")
@@ -44,9 +45,12 @@ func (m *Manager) AuthMiddleware() fiber.Handler {
 			return errors.ErrUnauthorized
 		}
 
-		user, err := m.userService.GetUserByID(context.Background(), uint(userID))
+		user, err := m.userService.GetUserByID(
+			context.WithValue(ctx, logger.RequestIDKey, requestID),
+			uint(userID),
+		)
+
 		if err != nil {
-			log.Info("user not found")
 			return errors.ErrUnauthorized
 		}
 

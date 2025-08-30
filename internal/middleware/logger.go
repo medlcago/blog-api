@@ -3,6 +3,7 @@ package middleware
 import (
 	"blog-api/internal/logger"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -12,13 +13,21 @@ import (
 func (m *Manager) LoggerMiddleware() fiber.Handler {
 	log := m.log.With(slog.String("component", "middleware/logger"))
 
+	var (
+		once       sync.Once
+		errHandler fiber.ErrorHandler
+	)
+
 	return func(c fiber.Ctx) error {
+		// override error handler once
+		once.Do(func() {
+			errHandler = c.App().ErrorHandler
+		})
 
 		start := time.Now()
 
 		err := c.Next()
 		if err != nil {
-			errHandler := c.App().ErrorHandler
 			if err := errHandler(c, err); err != nil {
 				_ = c.SendStatus(fiber.StatusInternalServerError)
 			}
@@ -38,6 +47,6 @@ func (m *Manager) LoggerMiddleware() fiber.Handler {
 			slog.String("duration", time.Since(start).String()),
 		)
 
-		return err
+		return nil // so that Fiber no longer calls ErrorHandler
 	}
 }

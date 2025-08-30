@@ -7,6 +7,5 @@ var (
 	ErrInvalidToken          = New(401, "invalid token")
 	ErrUnauthorized          = New(401, "unauthorized")
 	ErrNotFound              = New(404, "not found")
-	ErrInvalidQuery          = New(400, "invalid query parameters")
-	ErrInvalidBody           = New(400, "invalid request body")
+	ErrInvalidFile           = New(400, "invalid file")
 )

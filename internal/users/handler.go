@@ -1,12 +1,14 @@
 package users
 
 import (
+	"blog-api/internal/errors"
+	"blog-api/internal/logger"
 	"blog-api/internal/photos"
-	"blog-api/pkg/errors"
 	"blog-api/pkg/response"
 	"context"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/requestid"
 )
 
 type IUserHandler interface {
@@ -24,7 +26,7 @@ func NewUserHandler(photoService photos.IPhotoService) IUserHandler {
 	}
 }
 
-func (u *UserHandler) GetMe(ctx fiber.Ctx) error {
+func (h *UserHandler) GetMe(ctx fiber.Ctx) error {
 	user := MustGetUser(ctx)
 
 	return ctx.JSON(response.Response[*UserResponse]{
@@ -33,15 +35,21 @@ func (u *UserHandler) GetMe(ctx fiber.Ctx) error {
 	})
 }
 
-func (u *UserHandler) UploadAvatar(ctx fiber.Ctx) error {
+func (h *UserHandler) UploadAvatar(ctx fiber.Ctx) error {
 	user := MustGetUser(ctx)
+	requestID := requestid.FromContext(ctx)
 
 	file, err := ctx.FormFile("file")
 	if err != nil {
-		return errors.New(400, "invalid file")
+		return errors.ErrInvalidFile
 	}
 
-	res, err := u.photoService.UploadAvatar(context.Background(), user.UserID, file)
+	res, err := h.photoService.UploadAvatar(
+		context.WithValue(ctx, logger.RequestIDKey, requestID),
+		user.UserID,
+		file,
+	)
+
 	if err != nil {
 		return err
 	}

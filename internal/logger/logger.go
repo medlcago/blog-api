@@ -64,3 +64,7 @@ func FromCtx(ctx context.Context, log *slog.Logger) *slog.Logger {
 	}
 	return log
 }
+
+func Err(err error) slog.Attr {
+	return slog.Any("error", err)
+}

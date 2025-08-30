@@ -4,6 +4,7 @@ import (
 	"blog-api/config"
 	"blog-api/internal/auth"
 	"blog-api/internal/database"
+	"blog-api/internal/errors"
 	"blog-api/internal/middleware"
 	"blog-api/internal/photos"
 	"blog-api/internal/posts"
@@ -11,7 +12,6 @@ import (
 	"blog-api/internal/storage"
 	"blog-api/internal/tokenmanager"
 	"blog-api/internal/users"
-	"blog-api/pkg/errors"
 	"blog-api/pkg/struct_validator"
 	"context"
 	goerrors "errors"
@@ -48,23 +48,23 @@ func NewServer(deps *Dependencies) (*Server, error) {
 
 	// Services
 	jwtService := tokenmanager.NewJWTManager(deps.Cfg.SecretKey, deps.Cfg.JwtConfig)
-	userService := users.NewUserService(deps.DB)
+	userService := users.NewUserService(deps.DB, deps.Logger)
 	authService := auth.NewAuthService(jwtService, deps.DB, deps.RedisClient, deps.Logger)
-	postService := posts.NewPostService(deps.DB)
-	photoService := photos.NewPhotoService(deps.DB, deps.MinioClient)
+	postService := posts.NewPostService(deps.DB, deps.Logger)
+	photoService := photos.NewPhotoService(deps.DB, deps.MinioClient, deps.Logger)
 
 	mw := middleware.NewManager(deps.Logger, jwtService, userService)
 
 	// Handlers
-	authHandler := auth.NewAuthHandler(authService, deps.Logger)
+	authHandler := auth.NewAuthHandler(authService)
 	userHandler := users.NewUserHandler(photoService)
 	postHandler := posts.NewPostHandler(postService)
 
 	// App
 	app := fiber.New(fiber.Config{
 		StructValidator: struct_validator.New(deps.Validator),
-		ErrorHandler:    errors.ErrorHandler,
-		BodyLimit:       10 << 20, // TODO:  move body limit to config
+		ErrorHandler:    errors.NewErrorHandler(deps.Logger),
+		BodyLimit:       deps.Cfg.ServerConfig.BodyLimit,
 		ReadTimeout:     deps.Cfg.ServerConfig.ReadTimeout,
 		WriteTimeout:    deps.Cfg.ServerConfig.WriteTimeout,
 	})

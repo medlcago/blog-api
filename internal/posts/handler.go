@@ -1,12 +1,13 @@
 package posts
 
 import (
+	"blog-api/internal/logger"
 	"blog-api/internal/users"
-	"blog-api/pkg/errors"
 	"blog-api/pkg/response"
 	"context"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/requestid"
 )
 
 type IPostHandler interface {
@@ -30,16 +31,23 @@ func NewPostHandler(postService IPostService) IPostHandler {
 func (h *PostHandler) CreatePost(ctx fiber.Ctx) error {
 	user := users.MustGetUser(ctx)
 
+	requestID := requestid.FromContext(ctx)
+
 	var input CreatePostInput
 
 	if err := ctx.Bind().Body(&input); err != nil {
-		return errors.ErrInvalidBody
+		return err
 	}
 
-	post, err := h.postService.CreatePost(context.Background(), user.UserID, input)
+	post, err := h.postService.CreatePost(
+		context.WithValue(ctx, logger.RequestIDKey, requestID), user.UserID,
+		input,
+	)
+
 	if err != nil {
 		return err
 	}
+
 	return ctx.Status(fiber.StatusCreated).JSON(response.Response[*PostResponse]{
 		OK:   true,
 		Data: post,
@@ -48,7 +56,13 @@ func (h *PostHandler) CreatePost(ctx fiber.Ctx) error {
 
 func (h *PostHandler) GetPost(ctx fiber.Ctx) error {
 	postId := fiber.Params[uint](ctx, "id")
-	post, err := h.postService.GetPost(context.Background(), postId)
+	requestID := requestid.FromContext(ctx)
+
+	post, err := h.postService.GetPost(
+		context.WithValue(ctx, logger.RequestIDKey, requestID),
+		postId,
+	)
+
 	if err != nil {
 		return err
 	}
@@ -60,12 +74,18 @@ func (h *PostHandler) GetPost(ctx fiber.Ctx) error {
 }
 
 func (h *PostHandler) GetPosts(ctx fiber.Ctx) error {
+	requestID := requestid.FromContext(ctx)
+
 	var params FilterParams
 	if err := ctx.Bind().Query(&params); err != nil {
-		return errors.ErrInvalidQuery
+		return err
 	}
 
-	data, err := h.postService.GetPosts(context.Background(), params)
+	data, err := h.postService.GetPosts(
+		context.WithValue(ctx, logger.RequestIDKey, requestID),
+		params,
+	)
+
 	if err != nil {
 		return err
 	}
@@ -75,14 +95,22 @@ func (h *PostHandler) GetPosts(ctx fiber.Ctx) error {
 
 func (h *PostHandler) UpdatePost(ctx fiber.Ctx) error {
 	user := users.MustGetUser(ctx)
+	postID := fiber.Params[uint](ctx, "id")
+
+	requestID := requestid.FromContext(ctx)
 
 	var input CreatePostInput
 	if err := ctx.Bind().Body(&input); err != nil {
-		return errors.ErrInvalidBody
+		return err
 	}
 
-	postID := fiber.Params[uint](ctx, "id")
-	updatedPost, err := h.postService.UpdatePost(context.Background(), user.UserID, postID, input)
+	updatedPost, err := h.postService.UpdatePost(
+		context.WithValue(ctx, logger.RequestIDKey, requestID),
+		user.UserID,
+		postID,
+		input,
+	)
+
 	if err != nil {
 		return err
 	}
@@ -95,9 +123,17 @@ func (h *PostHandler) UpdatePost(ctx fiber.Ctx) error {
 
 func (h *PostHandler) DeletePost(ctx fiber.Ctx) error {
 	user := users.MustGetUser(ctx)
-
 	postID := fiber.Params[uint](ctx, "id")
-	if err := h.postService.DeletePost(context.Background(), user.UserID, postID); err != nil {
+
+	requestID := requestid.FromContext(ctx)
+
+	err := h.postService.DeletePost(
+		context.WithValue(ctx, logger.RequestIDKey, requestID),
+		user.UserID,
+		postID,
+	)
+
+	if err != nil {
 		return err
 	}
 

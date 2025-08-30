@@ -2,10 +2,8 @@ package auth
 
 import (
 	"blog-api/internal/logger"
-	"blog-api/pkg/errors"
 	"blog-api/pkg/response"
 	"context"
-	"log/slog"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/requestid"
@@ -19,37 +17,23 @@ type IAuthHandler interface {
 
 type AuthHandler struct {
 	authService IAuthService
-	logger      *slog.Logger
 }
 
-func NewAuthHandler(authService IAuthService, logger *slog.Logger) *AuthHandler {
+func NewAuthHandler(authService IAuthService) *AuthHandler {
 	return &AuthHandler{
 		authService: authService,
-		logger:      logger,
 	}
 }
 
-func (a *AuthHandler) Register(ctx fiber.Ctx) error {
+func (h *AuthHandler) Register(ctx fiber.Ctx) error {
 	requestID := requestid.FromContext(ctx)
-	log := logger.WithRequestID(
-		a.logger,
-		requestID,
-	)
 
 	var input RegisterUserInput
 	if err := ctx.Bind().JSON(&input); err != nil {
-		log.Error("invalid request body",
-			slog.String("path", ctx.Path()),
-			slog.Any("error", err),
-		)
-		return errors.ErrInvalidBody
+		return err
 	}
 
-	log.Info("register attempt",
-		slog.String("username", input.Username),
-	)
-
-	token, err := a.authService.Register(
+	token, err := h.authService.Register(
 		context.WithValue(ctx, logger.RequestIDKey, requestID),
 		input,
 	)
@@ -57,8 +41,6 @@ func (a *AuthHandler) Register(ctx fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-
-	log.Info("user registered successfully", slog.String("username", input.Username))
 
 	return ctx.Status(201).JSON(response.Response[*TokenResponse]{
 		OK:   true,
@@ -68,28 +50,16 @@ func (a *AuthHandler) Register(ctx fiber.Ctx) error {
 
 }
 
-func (a *AuthHandler) Login(ctx fiber.Ctx) error {
+func (h *AuthHandler) Login(ctx fiber.Ctx) error {
 	requestID := requestid.FromContext(ctx)
-	log := logger.WithRequestID(
-		a.logger,
-		requestID,
-	)
 
 	var input LoginUserInput
 
 	if err := ctx.Bind().JSON(&input); err != nil {
-		log.Error("invalid request body",
-			slog.String("path", ctx.Path()),
-			slog.Any("error", err),
-		)
-		return errors.ErrInvalidBody
+		return err
 	}
 
-	log.Info("login attempt",
-		slog.String("username", input.Username),
-	)
-
-	token, err := a.authService.Login(
+	token, err := h.authService.Login(
 		context.WithValue(ctx, logger.RequestIDKey, requestID),
 		input,
 	)
@@ -97,8 +67,6 @@ func (a *AuthHandler) Login(ctx fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-
-	log.Info("user successfully logged in", slog.String("username", input.Username))
 
 	return ctx.JSON(response.Response[*TokenResponse]{
 		OK:   true,
@@ -107,24 +75,16 @@ func (a *AuthHandler) Login(ctx fiber.Ctx) error {
 	})
 }
 
-func (a *AuthHandler) RefreshToken(ctx fiber.Ctx) error {
+func (h *AuthHandler) RefreshToken(ctx fiber.Ctx) error {
 	requestID := requestid.FromContext(ctx)
-	log := logger.WithRequestID(
-		a.logger,
-		requestID,
-	)
 
 	var input RefreshTokenInput
 
 	if err := ctx.Bind().JSON(&input); err != nil {
-		log.Error("invalid request body",
-			slog.String("path", ctx.Path()),
-			slog.Any("error", err),
-		)
-		return errors.ErrInvalidBody
+		return err
 	}
 
-	res, err := a.authService.RefreshToken(
+	res, err := h.authService.RefreshToken(
 		context.WithValue(ctx, logger.RequestIDKey, requestID),
 		input,
 	)
@@ -132,8 +92,6 @@ func (a *AuthHandler) RefreshToken(ctx fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-
-	log.Info("token successfully refreshed")
 
 	return ctx.JSON(response.Response[*TokenResponse]{
 		OK:   true,
