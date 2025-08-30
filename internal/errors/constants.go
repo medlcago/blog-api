@@ -8,4 +8,5 @@ var (
 	ErrUnauthorized          = New(401, "unauthorized")
 	ErrNotFound              = New(404, "not found")
 	ErrInvalidFile           = New(400, "invalid file")
+	ErrInvalidQuery          = New(400, "invalid query parameters")
 )

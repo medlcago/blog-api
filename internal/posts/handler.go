@@ -1,6 +1,7 @@
 package posts
 
 import (
+	"blog-api/internal/errors"
 	"blog-api/internal/logger"
 	"blog-api/internal/users"
 	"blog-api/pkg/response"
@@ -78,7 +79,7 @@ func (h *PostHandler) GetPosts(ctx fiber.Ctx) error {
 
 	var params FilterParams
 	if err := ctx.Bind().Query(&params); err != nil {
-		return err
+		return errors.ErrInvalidQuery
 	}
 
 	data, err := h.postService.GetPosts(
