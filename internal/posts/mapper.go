@@ -20,13 +20,15 @@ func MapPostToResponse(post models.Post) *PostResponse {
 
 	author := users.MapUserToResponse(post.Author)
 	return &PostResponse{
-		ID:        post.ID,
-		AuthorID:  post.AuthorID,
-		Title:     post.Title,
-		Content:   post.Content,
-		CreatedAt: post.CreatedAt,
-		Author:    author,
-		Entities:  MapEntitiesToResponse(post.Entities),
+		ID:           post.ID,
+		AuthorID:     post.AuthorID,
+		Title:        post.Title,
+		Content:      post.Content,
+		CreatedAt:    post.CreatedAt,
+		Author:       author,
+		Entities:     MapEntitiesToResponse(post.Entities),
+		UserReaction: post.UserReaction,
+		Reactions:    post.Reactions,
 	}
 }
 

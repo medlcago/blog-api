@@ -9,8 +9,8 @@ import (
 
 func RegisterPostRoutes(r fiber.Router, h posts.IPostHandler, middlewareManager *middleware.Manager) {
 	r.Post("/", middlewareManager.AuthMiddleware(), h.CreatePost)
-	r.Get("/:id<int>", h.GetPost)
-	r.Get("/", h.GetPosts)
+	r.Get("/:id<int>", middlewareManager.OptionalAuthMiddleware(), h.GetPost)
+	r.Get("/", middlewareManager.OptionalAuthMiddleware(), h.GetPosts)
 	r.Put("/:id<int>", middlewareManager.AuthMiddleware(), h.UpdatePost)
 	r.Delete("/:id<int>", middlewareManager.AuthMiddleware(), h.DeletePost)
 }

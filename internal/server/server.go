@@ -8,6 +8,7 @@ import (
 	"blog-api/internal/middleware"
 	"blog-api/internal/photos"
 	"blog-api/internal/posts"
+	"blog-api/internal/reactions"
 	"blog-api/internal/routes"
 	"blog-api/internal/storage"
 	"blog-api/internal/tokenmanager"
@@ -52,6 +53,7 @@ func NewServer(deps *Dependencies) (*Server, error) {
 	authService := auth.NewAuthService(jwtService, deps.DB, deps.RedisClient, deps.Logger)
 	postService := posts.NewPostService(deps.DB, deps.Logger)
 	photoService := photos.NewPhotoService(deps.DB, deps.MinioClient, deps.Logger)
+	reactionService := reactions.NewReactionService(deps.DB, deps.Logger)
 
 	mw := middleware.NewManager(deps.Logger, jwtService, userService)
 
@@ -59,6 +61,7 @@ func NewServer(deps *Dependencies) (*Server, error) {
 	authHandler := auth.NewAuthHandler(authService)
 	userHandler := users.NewUserHandler(photoService)
 	postHandler := posts.NewPostHandler(postService)
+	reactionHandler := reactions.NewReactionHandler(reactionService)
 
 	// App
 	app := fiber.New(fiber.Config{
@@ -80,11 +83,13 @@ func NewServer(deps *Dependencies) (*Server, error) {
 	authGroup := apiGroup.Group("/auth")
 	usersGroup := apiGroup.Group("/users")
 	postsGroup := apiGroup.Group("/posts")
+	reactionsGroup := apiGroup.Group("/reactions")
 
 	// Routes
 	routes.RegisterAuthRoutes(authGroup, authHandler)
 	routes.RegisterUserRoutes(usersGroup, userHandler, mw)
 	routes.RegisterPostRoutes(postsGroup, postHandler, mw)
+	routes.RegisterReactionRoutes(reactionsGroup, reactionHandler, mw)
 
 	return &Server{
 		app:          app,

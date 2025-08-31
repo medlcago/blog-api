@@ -26,8 +26,10 @@ type PostResponse struct {
 	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"created_at"`
 
-	Author   *users.UserResponse `json:"author,omitempty"`
-	Entities []*PostEntityInput  `json:"entities"`
+	Author       *users.UserResponse `json:"author,omitempty"`
+	Entities     []*PostEntityInput  `json:"entities"`
+	UserReaction *string             `json:"user_reaction,omitempty"`
+	Reactions    map[string]int64    `json:"reactions"`
 }
 
 type ListResponse struct {

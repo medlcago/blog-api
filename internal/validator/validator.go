@@ -9,5 +9,9 @@ func New() (*validator.Validate, error) {
 		return nil, err
 	}
 
+	if err := RegisterReactionValidation(v); err != nil {
+		return nil, err
+	}
+
 	return v, nil
 }

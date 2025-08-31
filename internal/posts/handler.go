@@ -59,9 +59,16 @@ func (h *PostHandler) GetPost(ctx fiber.Ctx) error {
 	postId := fiber.Params[uint](ctx, "id")
 	requestID := requestid.FromContext(ctx)
 
+	user := users.GetUser(ctx)
+	var userID *uint
+	if user != nil {
+		userID = &user.UserID
+	}
+
 	post, err := h.postService.GetPost(
 		context.WithValue(ctx, logger.RequestIDKey, requestID),
 		postId,
+		userID,
 	)
 
 	if err != nil {
@@ -77,6 +84,12 @@ func (h *PostHandler) GetPost(ctx fiber.Ctx) error {
 func (h *PostHandler) GetPosts(ctx fiber.Ctx) error {
 	requestID := requestid.FromContext(ctx)
 
+	user := users.GetUser(ctx)
+	var userID *uint
+	if user != nil {
+		userID = &user.UserID
+	}
+
 	var params FilterParams
 	if err := ctx.Bind().Query(&params); err != nil {
 		return errors.ErrInvalidQuery
@@ -85,6 +98,7 @@ func (h *PostHandler) GetPosts(ctx fiber.Ctx) error {
 	data, err := h.postService.GetPosts(
 		context.WithValue(ctx, logger.RequestIDKey, requestID),
 		params,
+		userID,
 	)
 
 	if err != nil {

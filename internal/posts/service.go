@@ -5,6 +5,7 @@ import (
 	"blog-api/internal/errors"
 	"blog-api/internal/logger"
 	"blog-api/internal/models"
+	"blog-api/internal/reactions"
 	"context"
 	goerrors "errors"
 	"log/slog"
@@ -14,8 +15,8 @@ import (
 
 type IPostService interface {
 	CreatePost(ctx context.Context, userID uint, input CreatePostInput) (*PostResponse, error)
-	GetPost(ctx context.Context, postID uint) (*PostResponse, error)
-	GetPosts(ctx context.Context, params FilterParams) (*ListResponse, error)
+	GetPost(ctx context.Context, postID uint, userID *uint) (*PostResponse, error)
+	GetPosts(ctx context.Context, params FilterParams, userID *uint) (*ListResponse, error)
 	UpdatePost(ctx context.Context, userID uint, postID uint, input CreatePostInput) (*PostResponse, error)
 	DeletePost(ctx context.Context, userID uint, postID uint) error
 }
@@ -70,7 +71,7 @@ func (s *PostService) CreatePost(ctx context.Context, userID uint, input CreateP
 	return MapPostToResponse(post), nil
 }
 
-func (s *PostService) GetPost(ctx context.Context, postID uint) (*PostResponse, error) {
+func (s *PostService) GetPost(ctx context.Context, postID uint, userID *uint) (*PostResponse, error) {
 	db := s.db.Get().WithContext(ctx)
 	log := logger.FromCtx(ctx, s.logger).With(slog.Any("post_id", postID))
 
@@ -89,12 +90,30 @@ func (s *PostService) GetPost(ctx context.Context, postID uint) (*PostResponse, 
 		return nil, err
 	}
 
+	aggReact, err := reactions.GetReactionsAggregate(db, "posts", []uint{postID})
+	if err != nil {
+		log.Error("failed to aggregate reactions", logger.Err(err))
+		return nil, err
+	}
+	post.Reactions = aggReact[postID]
+
+	if userID != nil && len(post.Reactions) > 0 {
+		userReact, err := reactions.GetUserReactions(db, "posts", []uint{post.ID}, *userID)
+		if err != nil {
+			log.Error("failed to get user reactions", logger.Err(err))
+			return nil, err
+		}
+		if userReaction, ok := userReact[post.ID]; ok {
+			post.UserReaction = &userReaction
+		}
+	}
+
 	log.Info("post retrieved successfully")
 
 	return MapPostToResponse(post), nil
 }
 
-func (s *PostService) GetPosts(ctx context.Context, params FilterParams) (*ListResponse, error) {
+func (s *PostService) GetPosts(ctx context.Context, params FilterParams, userID *uint) (*ListResponse, error) {
 	db := s.db.Get().WithContext(ctx)
 	log := logger.FromCtx(ctx, s.logger)
 
@@ -119,6 +138,34 @@ func (s *PostService) GetPosts(ctx context.Context, params FilterParams) (*ListR
 	if err := db.Model(&posts).Count(&total).Error; err != nil {
 		log.Error("failed to count posts", logger.Err(err))
 		return nil, err
+	}
+
+	postIDs := make([]uint, len(posts))
+	for i, p := range posts {
+		postIDs[i] = p.ID
+	}
+
+	aggReact, err := reactions.GetReactionsAggregate(db, "posts", postIDs)
+	if err != nil {
+		log.Error("failed to aggregate reactions", logger.Err(err))
+		return nil, err
+	}
+
+	var userReact map[uint]string
+	if userID != nil && len(aggReact) > 0 {
+		userReact, err = reactions.GetUserReactions(db, "posts", postIDs, *userID)
+		if err != nil {
+			log.Error("failed to get user reactions", logger.Err(err))
+			return nil, err
+		}
+	}
+
+	for i := range posts {
+		currPost := &posts[i]
+		currPost.Reactions = aggReact[currPost.ID]
+		if ur, ok := userReact[currPost.ID]; ok {
+			currPost.UserReaction = &ur
+		}
 	}
 
 	result := MapPostsToResponse(posts)
