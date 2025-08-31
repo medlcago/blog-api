@@ -59,8 +59,9 @@ func NewServer(deps *Dependencies) (*Server, error) {
 
 	// Handlers
 	authHandler := auth.NewAuthHandler(authService)
-	userHandler := users.NewUserHandler(photoService)
+	userHandler := users.NewUserHandler()
 	postHandler := posts.NewPostHandler(postService)
+	photoHandler := photos.NewPhotoHandler(photoService)
 	reactionHandler := reactions.NewReactionHandler(reactionService)
 
 	// App
@@ -83,12 +84,14 @@ func NewServer(deps *Dependencies) (*Server, error) {
 	authGroup := apiGroup.Group("/auth")
 	usersGroup := apiGroup.Group("/users")
 	postsGroup := apiGroup.Group("/posts")
+	photosGroup := apiGroup.Group("/photos")
 	reactionsGroup := apiGroup.Group("/reactions")
 
 	// Routes
 	routes.RegisterAuthRoutes(authGroup, authHandler)
 	routes.RegisterUserRoutes(usersGroup, userHandler, mw)
 	routes.RegisterPostRoutes(postsGroup, postHandler, mw)
+	routes.RegisterPhotoRoutes(photosGroup, photoHandler, mw)
 	routes.RegisterReactionRoutes(reactionsGroup, reactionHandler, mw)
 
 	return &Server{

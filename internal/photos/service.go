@@ -12,7 +12,6 @@ import (
 	"mime/multipart"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
 )
 
@@ -54,9 +53,8 @@ func (s *PhotoService) UploadAvatar(ctx context.Context, userID uint, file *mult
 		}
 	}()
 
-	ext := GetFileExt(file.Filename)
-	filename := fmt.Sprintf("avatars/%d/%s_%d%s", userID, uuid.NewString(), time.Now().UTC().UnixNano(), ext)
-	url := fmt.Sprintf("http://%s/%s/%s", s.minio.Client.EndpointURL().Host, s.minio.Bucket, filename)
+	filename := fmt.Sprintf("avatars/%d", userID)
+	url := fmt.Sprintf("http://%s/%s/%s?ts=%d", s.minio.Client.EndpointURL().Host, s.minio.Bucket, filename, time.Now().UTC().UnixNano())
 
 	db := s.db.Get().WithContext(ctx)
 
@@ -75,7 +73,7 @@ func (s *PhotoService) UploadAvatar(ctx context.Context, userID uint, file *mult
 
 		log.Warn("attempting to rollback: delete uploaded file from minio")
 		if delErr := s.minio.Client.RemoveObject(ctx, s.minio.Bucket, filename, minio.RemoveObjectOptions{}); delErr != nil {
-			log.Error("failed to delete file during rollback", slog.Any("error", delErr))
+			log.Error("failed to delete file during rollback", logger.Err(delErr))
 		}
 
 		return nil, err
