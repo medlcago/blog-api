@@ -10,6 +10,7 @@ func (d *DB) RunMigrations() error {
 		&models.User{},
 		&models.Post{},
 		&models.PostEntity{},
+		&models.ReactionType{},
 		&models.Reaction{},
 	)
 }

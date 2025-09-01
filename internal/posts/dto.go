@@ -1,6 +1,7 @@
 package posts
 
 import (
+	"blog-api/internal/models"
 	"blog-api/internal/users"
 	"time"
 )
@@ -26,10 +27,10 @@ type PostResponse struct {
 	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"created_at"`
 
-	Author       *users.UserResponse `json:"author,omitempty"`
-	Entities     []*PostEntityInput  `json:"entities"`
-	UserReaction *string             `json:"user_reaction,omitempty"`
-	Reactions    map[string]int64    `json:"reactions"`
+	Author       *users.UserResponse   `json:"author,omitempty"`
+	Entities     []*PostEntityInput    `json:"entities"`
+	UserReaction *models.UserReaction  `json:"user_reaction,omitempty"`
+	Reactions    []models.ReactionStat `json:"reactions"`
 }
 
 type ListResponse struct {

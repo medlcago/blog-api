@@ -104,7 +104,7 @@ func (s *PostService) GetPost(ctx context.Context, postID uint, userID *uint) (*
 			return nil, err
 		}
 		if userReaction, ok := userReact[post.ID]; ok {
-			post.UserReaction = &userReaction
+			post.UserReaction = userReaction
 		}
 	}
 
@@ -151,7 +151,7 @@ func (s *PostService) GetPosts(ctx context.Context, params FilterParams, userID 
 		return nil, err
 	}
 
-	var userReact map[uint]string
+	var userReact map[uint]*models.UserReaction
 	if userID != nil && len(aggReact) > 0 {
 		userReact, err = reactions.GetUserReactions(db, "posts", postIDs, *userID)
 		if err != nil {
@@ -164,7 +164,7 @@ func (s *PostService) GetPosts(ctx context.Context, params FilterParams, userID 
 		currPost := &posts[i]
 		currPost.Reactions = aggReact[currPost.ID]
 		if ur, ok := userReact[currPost.ID]; ok {
-			currPost.UserReaction = &ur
+			currPost.UserReaction = ur
 		}
 	}
 

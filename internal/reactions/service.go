@@ -42,7 +42,7 @@ func (s *ReactionService) setReaction(ctx context.Context, userID uint, input Se
 		slog.Uint64("user_id", uint64(userID)),
 		slog.String("target_type", input.TargetType),
 		slog.Uint64("target_id", uint64(input.TargetID)),
-		slog.String("reaction_type", string(input.ReactionType)),
+		slog.Uint64("reaction_type_id", uint64(input.ReactionID)),
 	)
 
 	if !slices.Contains(allowedTargets, input.TargetType) {
@@ -51,6 +51,15 @@ func (s *ReactionService) setReaction(ctx context.Context, userID uint, input Se
 	}
 
 	db := s.db.Get().WithContext(ctx)
+
+	var reactType models.ReactionType
+	if err := db.Where("id = ? AND is_active = ?", input.ReactionID, "true").First(&reactType).Error; err != nil {
+		if goerrors.Is(err, database.ErrRecordNotFound) {
+			log.Warn("invalid or inactive reaction")
+			return nil, errors.New(400, "invalid or inactive reaction")
+		}
+		return nil, err
+	}
 
 	var finalReaction *models.Reaction
 
@@ -61,7 +70,7 @@ func (s *ReactionService) setReaction(ctx context.Context, userID uint, input Se
 		).First(&existing).Error
 
 		if err == nil {
-			if existing.Type == input.ReactionType {
+			if existing.ReactionTypeID == input.ReactionID {
 				// delete if the same type
 				log.Info("removing existing reaction")
 				if err := tx.Delete(&existing).Error; err != nil {
@@ -71,12 +80,11 @@ func (s *ReactionService) setReaction(ctx context.Context, userID uint, input Se
 				finalReaction = nil
 				return nil
 			} else {
-				log.Info("updating reaction type",
-					slog.String("old_type", string(existing.Type)),
-					slog.String("new_type", string(input.ReactionType)),
+				log.Info("updating reaction",
+					slog.Uint64("new_reaction_type_id", uint64(input.ReactionID)),
 				)
 
-				existing.Type = input.ReactionType
+				existing.ReactionTypeID = input.ReactionID
 				if err := tx.Save(&existing).Error; err != nil {
 					log.Error("failed to update reaction", logger.Err(err))
 					return err
@@ -91,10 +99,10 @@ func (s *ReactionService) setReaction(ctx context.Context, userID uint, input Se
 
 		log.Info("creating new reaction")
 		newReaction := models.Reaction{
-			UserID:     userID,
-			Type:       input.ReactionType,
-			TargetID:   input.TargetID,
-			TargetType: input.TargetType,
+			UserID:         userID,
+			TargetID:       input.TargetID,
+			TargetType:     input.TargetType,
+			ReactionTypeID: input.ReactionID,
 		}
 		if err := tx.Create(&newReaction).Error; err != nil {
 			log.Error("failed to create reaction", logger.Err(err))
@@ -112,13 +120,13 @@ func (s *ReactionService) setReaction(ctx context.Context, userID uint, input Se
 		log.Error("failed to aggregate reactions", logger.Err(err))
 		return nil, err
 	}
-	statistics := aggReact[input.TargetID]
+	reactions := aggReact[input.TargetID]
 
 	reactResponse := &ReactionResponse{
 		UserID:     userID,
 		TargetID:   input.TargetID,
 		TargetType: input.TargetType,
-		Statistics: statistics,
+		Reactions:  reactions,
 	}
 
 	if finalReaction == nil { // reaction removed
@@ -126,19 +134,21 @@ func (s *ReactionService) setReaction(ctx context.Context, userID uint, input Se
 		return reactResponse, nil
 	}
 
-	reactResponse.ReactionType = &finalReaction.Type
-	log.Info("reaction set successfully",
-		slog.String("reaction_type", string(finalReaction.Type)),
-	)
+	reactResponse.UserReaction = &models.UserReaction{
+		TargetID: input.TargetID,
+		Type:     reactType.Name,
+		Icon:     reactType.Icon,
+	}
+	log.Info("reaction set successfully")
 	return reactResponse, nil
 }
 
 func (s *ReactionService) SetPostReaction(ctx context.Context, userID uint, input SetPostReactionInput) (*ReactionResponse, error) {
 	return s.setReaction(ctx, userID,
 		SetReactionInput{
-			TargetType:   TargetPost,
-			TargetID:     input.PostID,
-			ReactionType: input.ReactionType,
+			TargetType: TargetPost,
+			TargetID:   input.PostID,
+			ReactionID: input.ReactionID,
 		},
 	)
 }

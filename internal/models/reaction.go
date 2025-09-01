@@ -1,36 +1,31 @@
 package models
 
-import (
-	"time"
-)
-
-type ReactionType string
-
-const (
-	ReactionLike    ReactionType = "like"
-	ReactionDislike ReactionType = "dislike"
-	ReactionLove    ReactionType = "love"
-	ReactionLaugh   ReactionType = "laugh"
-	ReactionSad     ReactionType = "sad"
-	ReactionAngry   ReactionType = "angry"
-	ReactionFire    ReactionType = "fire"
-)
-
-var (
-	AllowedReactions = []ReactionType{
-		ReactionLike, ReactionDislike, ReactionLove,
-		ReactionLaugh, ReactionSad, ReactionAngry, ReactionFire,
-	}
-)
+import "time"
 
 type Reaction struct {
-	ID     uint         `gorm:"primaryKey"`
-	UserID uint         `gorm:"not null;uniqueIndex:idx_user_target"`
-	Type   ReactionType `gorm:"type:varchar(20);not null"`
+	ID     uint `gorm:"primaryKey"`
+	UserID uint `gorm:"not null;uniqueIndex:idx_user_target"`
 
-	TargetID   uint   `gorm:"not null;uniqueIndex:idx_user_target"`
-	TargetType string `gorm:"size:50;not null;uniqueIndex:idx_user_target"`
+	TargetID       uint   `gorm:"not null;uniqueIndex:idx_user_target"`
+	TargetType     string `gorm:"size:50;not null;uniqueIndex:idx_user_target"`
+	ReactionTypeID uint   `gorm:"not null"`
 
 	CreatedAt time.Time
-	User      User `gorm:"foreignKey:UserID"`
+	UpdatedAt time.Time
+
+	User         User         `gorm:"foreignKey:UserID"`
+	ReactionType ReactionType `gorm:"foreignKey:ReactionTypeID"`
+}
+
+type UserReaction struct {
+	TargetID uint   `json:"-"`
+	Type     string `json:"type"`
+	Icon     string `json:"icon"`
+}
+
+type ReactionStat struct {
+	TargetID uint   `json:"-"`
+	Type     string `json:"type"`
+	Count    int64  `json:"count"`
+	Icon     string `json:"icon"`
 }

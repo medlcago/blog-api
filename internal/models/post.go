@@ -13,6 +13,6 @@ type Post struct {
 	Author   User         `gorm:"foreignKey:AuthorID"`
 	Entities []PostEntity `gorm:"foreignKey:PostID;constraint:OnDelete:CASCADE"`
 
-	UserReaction *string          `gorm:"-"`
-	Reactions    map[string]int64 `gorm:"-"`
+	UserReaction *UserReaction  `gorm:"-"`
+	Reactions    []ReactionStat `gorm:"-"`
 }

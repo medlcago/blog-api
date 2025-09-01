@@ -1,56 +1,51 @@
 package reactions
 
-import "gorm.io/gorm"
+import (
+	"blog-api/internal/models"
 
-type ReactionAggregate struct {
-	TargetID uint
-	Type     string
-	Count    int64
-}
+	"gorm.io/gorm"
+)
 
-type UserReaction struct {
-	TargetID uint
-	Type     string
-}
+func GetReactionsAggregate(db *gorm.DB, targetType string, targetIDs []uint) (map[uint][]models.ReactionStat, error) {
+	var results []models.ReactionStat
 
-func GetReactionsAggregate(db *gorm.DB, targetType string, targetIDs []uint) (map[uint]map[string]int64, error) {
-	var results []ReactionAggregate
-
-	err := db.Table("reactions").
-		Select("target_id, type, COUNT(*) as count").
-		Where("target_type = ? AND target_id IN ?", targetType, targetIDs).
-		Group("target_id, type").
+	err := db.Table("reactions r").
+		Select("r.target_id as target_id, rt.name as type, rt.icon as icon, COUNT(*) as count").
+		Joins("JOIN reaction_types rt on r.reaction_type_id = rt.id").
+		Where("r.target_type = ? AND r.target_id IN ?", targetType, targetIDs).
+		Group("r.target_id, rt.name, rt.icon").
 		Scan(&results).Error
 	if err != nil {
 		return nil, err
 	}
 
-	// map[targetID] -> map[type]count
-	aggMap := make(map[uint]map[string]int64)
+	aggMap := make(map[uint][]models.ReactionStat)
 	for _, r := range results {
-		if _, ok := aggMap[r.TargetID]; !ok {
-			aggMap[r.TargetID] = make(map[string]int64)
-		}
-		aggMap[r.TargetID][r.Type] = r.Count
+		aggMap[r.TargetID] = append(aggMap[r.TargetID], models.ReactionStat{
+			TargetID: r.TargetID,
+			Type:     r.Type,
+			Count:    r.Count,
+			Icon:     r.Icon,
+		})
 	}
-
 	return aggMap, nil
 }
 
-func GetUserReactions(db *gorm.DB, targetType string, targetIDs []uint, userID uint) (map[uint]string, error) {
-	var results []UserReaction
+func GetUserReactions(db *gorm.DB, targetType string, targetIDs []uint, userID uint) (map[uint]*models.UserReaction, error) {
+	var results []models.UserReaction
 
-	err := db.Table("reactions").
-		Select("target_id, type").
-		Where("target_type = ? AND target_id IN ? AND user_id = ?", targetType, targetIDs, userID).
+	err := db.Table("reactions r").
+		Select(`r.target_id as target_id, rt.name as type, rt.icon as icon`).
+		Joins("JOIN reaction_types rt ON r.reaction_type_id = rt.id").
+		Where("r.target_type = ? AND r.target_id IN ? AND r.user_id = ?", targetType, targetIDs, userID).
 		Scan(&results).Error
 	if err != nil {
 		return nil, err
 	}
 
-	userMap := make(map[uint]string)
+	userMap := make(map[uint]*models.UserReaction)
 	for _, r := range results {
-		userMap[r.TargetID] = r.Type
+		userMap[r.TargetID] = &r
 	}
 
 	return userMap, nil
