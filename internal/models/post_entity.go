@@ -1,7 +1,9 @@
 package models
 
+import "gorm.io/gorm"
+
 type PostEntity struct {
-	BaseModel
+	gorm.Model
 	PostID uint    `gorm:"index;not null"`
 	Offset int     `gorm:"not null"`
 	Length int     `gorm:"not null"`
