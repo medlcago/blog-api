@@ -8,5 +8,6 @@ import (
 )
 
 func RegisterReactionRoutes(r fiber.Router, h reactions.IReactionHandler, mw *middleware.Manager) {
+	r.Get("/available", h.GetAvailableReactions)
 	r.Post("/posts", mw.AuthMiddleware(), h.SetPostReaction)
 }

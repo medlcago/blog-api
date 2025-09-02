@@ -21,6 +21,7 @@ type UserReaction struct {
 	TargetID uint   `json:"-"`
 	Type     string `json:"type"`
 	Icon     string `json:"icon"`
+	IsActive bool   `json:"is_active"`
 }
 
 type ReactionStat struct {
@@ -28,4 +29,5 @@ type ReactionStat struct {
 	Type     string `json:"type"`
 	Count    int64  `json:"count"`
 	Icon     string `json:"icon"`
+	IsActive bool   `json:"is_active"`
 }

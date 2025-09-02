@@ -21,3 +21,10 @@ type ReactionResponse struct {
 
 	Reactions []models.ReactionStat `json:"reactions"`
 }
+
+type ReactionTypeResponse struct {
+	ReactionID uint   `json:"reaction_id"`
+	Type       string `json:"type"`
+	Icon       string `json:"icon"`
+	IsActive   bool   `json:"is_active"`
+}

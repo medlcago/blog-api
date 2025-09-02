@@ -12,6 +12,7 @@ import (
 
 type IReactionHandler interface {
 	SetPostReaction(ctx fiber.Ctx) error
+	GetAvailableReactions(ctx fiber.Ctx) error
 }
 
 type ReactionHandler struct {
@@ -41,6 +42,17 @@ func (h *ReactionHandler) SetPostReaction(ctx fiber.Ctx) error {
 		input,
 	)
 
+	if err != nil {
+		return err
+	}
+
+	return ctx.JSON(response.NewResponse(res))
+}
+
+func (h *ReactionHandler) GetAvailableReactions(ctx fiber.Ctx) error {
+	requestID := requestid.FromContext(ctx)
+
+	res, err := h.reactionService.GetAvailableReactions(context.WithValue(ctx, logger.RequestIDKey, requestID))
 	if err != nil {
 		return err
 	}

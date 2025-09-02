@@ -10,10 +10,10 @@ func GetReactionsAggregate(db *gorm.DB, targetType string, targetIDs []uint) (ma
 	var results []models.ReactionStat
 
 	err := db.Table("reactions r").
-		Select("r.target_id as target_id, rt.name as type, rt.icon as icon, COUNT(*) as count").
+		Select("r.target_id as target_id, rt.name as type, rt.icon as icon, rt.is_active as is_active, COUNT(*) as count").
 		Joins("JOIN reaction_types rt on r.reaction_type_id = rt.id").
 		Where("r.target_type = ? AND r.target_id IN ?", targetType, targetIDs).
-		Group("r.target_id, rt.name, rt.icon").
+		Group("r.target_id, rt.name, rt.icon, rt.is_active").
 		Scan(&results).Error
 	if err != nil {
 		return nil, err
@@ -26,6 +26,7 @@ func GetReactionsAggregate(db *gorm.DB, targetType string, targetIDs []uint) (ma
 			Type:     r.Type,
 			Count:    r.Count,
 			Icon:     r.Icon,
+			IsActive: r.IsActive,
 		})
 	}
 	return aggMap, nil
@@ -35,7 +36,7 @@ func GetUserReactions(db *gorm.DB, targetType string, targetIDs []uint, userID u
 	var results []models.UserReaction
 
 	err := db.Table("reactions r").
-		Select(`r.target_id as target_id, rt.name as type, rt.icon as icon`).
+		Select(`r.target_id as target_id, rt.name as type, rt.icon as icon, rt.is_active as is_active`).
 		Joins("JOIN reaction_types rt ON r.reaction_type_id = rt.id").
 		Where("r.target_type = ? AND r.target_id IN ? AND r.user_id = ?", targetType, targetIDs, userID).
 		Scan(&results).Error

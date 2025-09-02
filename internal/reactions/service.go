@@ -23,6 +23,7 @@ var (
 
 type IReactionService interface {
 	SetPostReaction(ctx context.Context, userID uint, input SetPostReactionInput) (*ReactionResponse, error)
+	GetAvailableReactions(ctx context.Context) ([]*ReactionTypeResponse, error)
 }
 
 type ReactionService struct {
@@ -138,6 +139,7 @@ func (s *ReactionService) setReaction(ctx context.Context, userID uint, input Se
 		TargetID: input.TargetID,
 		Type:     reactType.Name,
 		Icon:     reactType.Icon,
+		IsActive: reactType.IsActive,
 	}
 	log.Info("reaction set successfully")
 	return reactResponse, nil
@@ -151,4 +153,17 @@ func (s *ReactionService) SetPostReaction(ctx context.Context, userID uint, inpu
 			ReactionID: input.ReactionID,
 		},
 	)
+}
+
+func (s *ReactionService) GetAvailableReactions(ctx context.Context) ([]*ReactionTypeResponse, error) {
+	db := s.db.Get().WithContext(ctx)
+	log := logger.FromCtx(ctx, s.logger)
+
+	var availableReactionTypes []models.ReactionType
+	if err := db.Find(&availableReactionTypes, "is_active = true").Error; err != nil {
+		log.Error("failed to get available reaction types", logger.Err(err))
+		return nil, err
+	}
+
+	return MapReactionTypesToResponse(availableReactionTypes), nil
 }
