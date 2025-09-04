@@ -88,7 +88,7 @@ func NewServer(deps *Dependencies) (*Server, error) {
 	reactionsGroup := apiGroup.Group("/reactions")
 
 	// Routes
-	routes.RegisterAuthRoutes(authGroup, authHandler)
+	routes.RegisterAuthRoutes(authGroup, authHandler, mw)
 	routes.RegisterUserRoutes(usersGroup, userHandler, mw)
 	routes.RegisterPostRoutes(postsGroup, postHandler, mw)
 	routes.RegisterPhotoRoutes(photosGroup, photoHandler, mw)

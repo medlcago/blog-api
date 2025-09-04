@@ -2,7 +2,6 @@ package tokenmanager
 
 import (
 	"blog-api/config"
-	"errors"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -12,6 +11,8 @@ import (
 const (
 	AccessToken  = "access"
 	RefreshToken = "refresh"
+
+	DefaultTokenTTL = 10 * time.Minute
 )
 
 type JWTManager struct {
@@ -20,7 +21,7 @@ type JWTManager struct {
 	refreshTTL time.Duration
 }
 
-func NewJWTManager(secret string, cfg config.JwtConfig) JWTService {
+func NewJWTManager(secret string, cfg config.JwtConfig) TokenManager {
 	return &JWTManager{
 		secretKey:  []byte(secret),
 		accessTTL:  cfg.AccessTTL,
@@ -28,23 +29,17 @@ func NewJWTManager(secret string, cfg config.JwtConfig) JWTService {
 	}
 }
 
-func (m *JWTManager) AccessTTL() time.Duration {
-	return m.accessTTL
-}
-
-func (m *JWTManager) RefreshTTL() time.Duration {
-	return m.refreshTTL
-}
-
-func (m *JWTManager) GenerateToken(userID string, tokenType string) (string, error) {
-	var ttl time.Duration
+func (m *JWTManager) GenerateToken(userID string, tokenType string, ttl ...time.Duration) (string, time.Duration, error) {
+	tokenTTL := DefaultTokenTTL
 	switch tokenType {
 	case AccessToken:
-		ttl = m.AccessTTL()
+		tokenTTL = m.accessTTL
 	case RefreshToken:
-		ttl = m.RefreshTTL()
+		tokenTTL = m.refreshTTL
 	default:
-		return "", errors.New("unknown token type")
+		if len(ttl) > 0 {
+			tokenTTL = ttl[0]
+		}
 	}
 
 	now := time.Now().UTC()
@@ -52,7 +47,7 @@ func (m *JWTManager) GenerateToken(userID string, tokenType string) (string, err
 		TokenType: tokenType,
 		UserID:    userID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
+			ExpiresAt: jwt.NewNumericDate(now.Add(tokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(now),
 			Subject:   userID,
 			ID:        uuid.NewString(),
@@ -60,21 +55,25 @@ func (m *JWTManager) GenerateToken(userID string, tokenType string) (string, err
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(m.secretKey)
+
+	tokenStr, err := token.SignedString(m.secretKey)
+	if err != nil {
+		return "", 0, err
+	}
+	return tokenStr, tokenTTL, nil
 }
 
 func (m *JWTManager) ValidateToken(tokenStr string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		return m.secretKey, nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
 
 	claims, ok := token.Claims.(*Claims)
 	if !ok || !token.Valid {
-		return nil, errors.New("invalid token claims")
+		return nil, jwt.ErrTokenInvalidClaims
 	}
 	return claims, nil
 }

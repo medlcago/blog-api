@@ -21,27 +21,28 @@ type IAuthService interface {
 	Register(ctx context.Context, input RegisterUserInput) (*TokenResponse, error)
 	Login(ctx context.Context, input LoginUserInput) (*TokenResponse, error)
 	RefreshToken(ctx context.Context, input RefreshTokenInput) (*TokenResponse, error)
+	ChangePassword(ctx context.Context, userID uint, input ChangePasswordInput) error
 }
 
 type AuthService struct {
-	jwtService tokenmanager.JWTService
-	db         *database.DB
-	redis      *storage.RedisClient
-	logger     *slog.Logger
+	tokenService tokenmanager.TokenManager
+	db           *database.DB
+	redis        *storage.RedisClient
+	logger       *slog.Logger
 }
 
-func NewAuthService(jwtService tokenmanager.JWTService, db *database.DB, redis *storage.RedisClient, logger *slog.Logger) IAuthService {
+func NewAuthService(tokenService tokenmanager.TokenManager, db *database.DB, redis *storage.RedisClient, logger *slog.Logger) IAuthService {
 	return &AuthService{
-		jwtService: jwtService,
-		db:         db,
-		redis:      redis,
-		logger:     logger,
+		tokenService: tokenService,
+		db:           db,
+		redis:        redis,
+		logger:       logger,
 	}
 }
 
 func (s *AuthService) Token(userID string) (*TokenResponse, error) {
-	accessToken, err1 := s.jwtService.GenerateToken(userID, tokenmanager.AccessToken)
-	refreshToken, err2 := s.jwtService.GenerateToken(userID, tokenmanager.RefreshToken)
+	accessToken, accessTokenTTL, err1 := s.tokenService.GenerateToken(userID, tokenmanager.AccessToken)
+	refreshToken, refreshTokenTTL, err2 := s.tokenService.GenerateToken(userID, tokenmanager.RefreshToken)
 
 	if err := goerrors.Join(err1, err2); err != nil {
 		return nil, err
@@ -49,9 +50,9 @@ func (s *AuthService) Token(userID string) (*TokenResponse, error) {
 
 	return &TokenResponse{
 		AccessToken:           accessToken,
-		AccessTokenExpiresIn:  int(s.jwtService.AccessTTL().Seconds()),
+		AccessTokenExpiresIn:  int(accessTokenTTL.Seconds()),
 		RefreshToken:          refreshToken,
-		RefreshTokenExpiresIn: int(s.jwtService.RefreshTTL().Seconds()),
+		RefreshTokenExpiresIn: int(refreshTokenTTL.Seconds()),
 	}, nil
 }
 
@@ -154,7 +155,7 @@ func (s *AuthService) Login(ctx context.Context, input LoginUserInput) (*TokenRe
 func (s *AuthService) RefreshToken(ctx context.Context, input RefreshTokenInput) (*TokenResponse, error) {
 	log := logger.FromCtx(ctx, s.logger)
 
-	claims, err := s.jwtService.ValidateToken(input.RefreshToken)
+	claims, err := s.tokenService.ValidateToken(input.RefreshToken)
 	if err != nil {
 		log.Info("invalid token provided", logger.Err(err))
 		return nil, errors.ErrInvalidToken
@@ -197,4 +198,41 @@ func (s *AuthService) RefreshToken(ctx context.Context, input RefreshTokenInput)
 	log.Info("token successfully refreshed")
 
 	return token, err
+}
+
+func (s *AuthService) ChangePassword(ctx context.Context, userID uint, input ChangePasswordInput) error {
+	db := s.db.Get().WithContext(ctx)
+	log := logger.FromCtx(ctx, s.logger).With(slog.Uint64("user_id", uint64(userID)))
+
+	var user models.User
+	if err := db.First(&user, userID).Error; err != nil {
+		if goerrors.Is(err, database.ErrRecordNotFound) {
+			log.Warn("user not found")
+			return errors.New(404, "not found")
+		}
+		log.Error("failed to get user", logger.Err(err))
+		return err
+	}
+
+	if !password.CheckPasswordHash(input.OldPassword, user.Password) {
+		return errors.New(400, "incorrect old password")
+	}
+
+	if input.OldPassword == input.NewPassword {
+		log.Warn("new password matches old password")
+		return errors.New(400, "new password cannot be the same as old password")
+	}
+
+	hashedPassword, err := password.HashPassword(input.NewPassword)
+	if err != nil {
+		log.Error("failed to hash password", logger.Err(err))
+		return err
+	}
+
+	if err := db.Model(&user).Update("password", hashedPassword).Error; err != nil {
+		log.Error("failed to change password", logger.Err(err))
+		return err
+	}
+
+	return nil
 }

@@ -21,3 +21,8 @@ type TokenResponse struct {
 	RefreshToken          string `json:"refresh_token"`
 	RefreshTokenExpiresIn int    `json:"refresh_token_expires_in"`
 }
+
+type ChangePasswordInput struct {
+	OldPassword string `form:"old_password" validate:"required"`
+	NewPassword string `form:"new_password" validate:"required,min=6,max=60"`
+}

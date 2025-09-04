@@ -8,11 +8,11 @@ import (
 
 type Manager struct {
 	log         *slog.Logger
-	jwtService  tokenmanager.JWTService
+	jwtService  tokenmanager.TokenManager
 	userService users.IUserService
 }
 
-func NewManager(log *slog.Logger, jwtService tokenmanager.JWTService, userService users.IUserService) *Manager {
+func NewManager(log *slog.Logger, jwtService tokenmanager.TokenManager, userService users.IUserService) *Manager {
 	return &Manager{
 		log:         log,
 		jwtService:  jwtService,

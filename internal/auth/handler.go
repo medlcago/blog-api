@@ -2,6 +2,7 @@ package auth
 
 import (
 	"blog-api/internal/logger"
+	"blog-api/internal/users"
 	"blog-api/pkg/response"
 	"context"
 
@@ -13,13 +14,14 @@ type IAuthHandler interface {
 	Register(ctx fiber.Ctx) error
 	Login(ctx fiber.Ctx) error
 	RefreshToken(ctx fiber.Ctx) error
+	ChangePassword(ctx fiber.Ctx) error
 }
 
 type AuthHandler struct {
 	authService IAuthService
 }
 
-func NewAuthHandler(authService IAuthService) *AuthHandler {
+func NewAuthHandler(authService IAuthService) IAuthHandler {
 	return &AuthHandler{
 		authService: authService,
 	}
@@ -98,4 +100,23 @@ func (h *AuthHandler) RefreshToken(ctx fiber.Ctx) error {
 		Msg:  "Token refreshed!",
 		Data: res,
 	})
+}
+
+func (h *AuthHandler) ChangePassword(ctx fiber.Ctx) error {
+	requestID := requestid.FromContext(ctx)
+
+	user := users.MustGetUser(ctx)
+
+	var input ChangePasswordInput
+
+	if err := ctx.Bind().Form(&input); err != nil {
+		return err
+	}
+
+	err := h.authService.ChangePassword(context.WithValue(ctx, logger.RequestIDKey, requestID), user.UserID, input)
+	if err != nil {
+		return err
+	}
+
+	return ctx.SendString("OK")
 }
