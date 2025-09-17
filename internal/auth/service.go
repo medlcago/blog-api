@@ -50,6 +50,7 @@ type IAuthService interface {
 	Login2FA(ctx context.Context, input Login2FAInput) (*TokenResponse, error)
 	Enable2FA(ctx context.Context, userID uint) (*TwoFASetupResponse, error)
 	Verify2FA(ctx context.Context, userID uint, input Verify2FAInput) error
+	Disable2FA(ctx context.Context, userID uint) error
 }
 
 type AuthService struct {
@@ -405,5 +406,31 @@ func (s *AuthService) Verify2FA(ctx context.Context, userID uint, input Verify2F
 		log.Error("failed to update user: two_fa_enabled", logger.Err(err))
 		return err
 	}
+	return nil
+}
+
+func (s *AuthService) Disable2FA(ctx context.Context, userID uint) error {
+	db := s.db.Get().WithContext(ctx)
+	log := logger.FromCtx(ctx, s.logger).With(slog.Uint64("user_id", uint64(userID)))
+
+	var user models.User
+	if err := db.Select("id", "two_fa_enabled").First(&user, userID).Error; err != nil {
+		log.Warn("user not found")
+		return errors.New(400, "invalid request")
+	}
+
+	if !user.TwoFAEnabled {
+		log.Info("2FA is not enabled")
+		return errors.New(400, "2FA is not enabled")
+	}
+
+	if err := db.Model(&user).Updates(map[string]any{
+		"two_fa_enabled": false,
+		"two_fa_secret":  nil,
+	}).Error; err != nil {
+		log.Error("failed to disable 2FA", logger.Err(err))
+		return err
+	}
+
 	return nil
 }

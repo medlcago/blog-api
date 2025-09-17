@@ -16,4 +16,5 @@ func RegisterAuthRoutes(r fiber.Router, h auth.IAuthHandler, mw *middleware.Mana
 
 	r.Post("/enable-2fa", mw.AuthMiddleware(), h.Enable2FA)
 	r.Post("/verify-2fa", mw.AuthMiddleware(), h.Verify2FA)
+	r.Post("/disable-2fa", mw.AuthMiddleware(), h.Disable2FA)
 }

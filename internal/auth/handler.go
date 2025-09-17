@@ -19,6 +19,7 @@ type IAuthHandler interface {
 	Login2FA(ctx fiber.Ctx) error
 	Enable2FA(ctx fiber.Ctx) error
 	Verify2FA(ctx fiber.Ctx) error
+	Disable2FA(ctx fiber.Ctx) error
 }
 
 type AuthHandler struct {
@@ -171,6 +172,22 @@ func (h *AuthHandler) Verify2FA(ctx fiber.Ctx) error {
 		context.WithValue(ctx, logger.RequestIDKey, requestID),
 		user.UserID,
 		input,
+	)
+	if err != nil {
+		return err
+	}
+
+	return ctx.SendString("OK")
+}
+
+func (h *AuthHandler) Disable2FA(ctx fiber.Ctx) error {
+	user := users.MustGetUser(ctx)
+
+	requestID := requestid.FromContext(ctx)
+
+	err := h.authService.Disable2FA(
+		context.WithValue(ctx, logger.RequestIDKey, requestID),
+		user.UserID,
 	)
 	if err != nil {
 		return err
