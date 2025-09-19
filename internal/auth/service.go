@@ -28,16 +28,16 @@ const (
 	refreshTokenKeyPrefix    = "refresh_token"
 )
 
-func (s *AuthService) getRegisterAttemptKey(username string) string {
+func (s *authService) getRegisterAttemptKey(username string) string {
 	normalizedUsername := strings.ToLower(strings.TrimSpace(username))
 	return fmt.Sprintf("%s:%s", registerAttemptKeyPrefix, normalizedUsername)
 }
 
-func (s *AuthService) get2FAAuthKey(userID uint) string {
+func (s *authService) get2FAAuthKey(userID uint) string {
 	return fmt.Sprintf("%s:%d", twoFAAuthKeyPrefix, userID)
 }
 
-func (s *AuthService) getRefreshTokenKey(tokenID string) string {
+func (s *authService) getRefreshTokenKey(tokenID string) string {
 	return fmt.Sprintf("%s:%s", refreshTokenKeyPrefix, tokenID)
 }
 
@@ -53,7 +53,7 @@ type IAuthService interface {
 	Disable2FA(ctx context.Context, userID uint) error
 }
 
-type AuthService struct {
+type authService struct {
 	tokenService tokenmanager.TokenManager
 	db           *database.DB
 	redis        *storage.RedisClient
@@ -61,7 +61,7 @@ type AuthService struct {
 }
 
 func NewAuthService(tokenService tokenmanager.TokenManager, db *database.DB, redis *storage.RedisClient, logger *slog.Logger) IAuthService {
-	return &AuthService{
+	return &authService{
 		tokenService: tokenService,
 		db:           db,
 		redis:        redis,
@@ -69,7 +69,7 @@ func NewAuthService(tokenService tokenmanager.TokenManager, db *database.DB, red
 	}
 }
 
-func (s *AuthService) Token(userID string) (*TokenResponse, error) {
+func (s *authService) Token(userID string) (*TokenResponse, error) {
 	accessToken, accessTokenTTL, err1 := s.tokenService.GenerateToken(userID, tokenmanager.AccessToken)
 	refreshToken, refreshTokenTTL, err2 := s.tokenService.GenerateToken(userID, tokenmanager.RefreshToken)
 
@@ -85,9 +85,9 @@ func (s *AuthService) Token(userID string) (*TokenResponse, error) {
 	}, nil
 }
 
-func (s *AuthService) Register(ctx context.Context, input RegisterUserInput) (*TokenResponse, error) {
-	db := s.db.Get().WithContext(ctx)
-	log := logger.FromCtx(ctx, s.logger).With(slog.String("username", input.Username))
+func (s *authService) Register(ctx context.Context, input RegisterUserInput) (*TokenResponse, error) {
+	db := s.db.WithContext(ctx)
+	log := logger.WithUsername(logger.FromCtx(ctx, s.logger), input.Username)
 
 	log.Info("register attempt")
 
@@ -145,9 +145,9 @@ func (s *AuthService) Register(ctx context.Context, input RegisterUserInput) (*T
 
 }
 
-func (s *AuthService) Login(ctx context.Context, input LoginUserInput) (*LoginResponse, error) {
-	db := s.db.Get().WithContext(ctx)
-	log := logger.FromCtx(ctx, s.logger).With(slog.String("username", input.Username))
+func (s *authService) Login(ctx context.Context, input LoginUserInput) (*LoginResponse, error) {
+	db := s.db.WithContext(ctx)
+	log := logger.WithUsername(logger.FromCtx(ctx, s.logger), input.Username)
 
 	log.Info("login attempt")
 
@@ -199,7 +199,7 @@ func (s *AuthService) Login(ctx context.Context, input LoginUserInput) (*LoginRe
 	}, nil
 }
 
-func (s *AuthService) RefreshToken(ctx context.Context, input RefreshTokenInput) (*TokenResponse, error) {
+func (s *authService) RefreshToken(ctx context.Context, input RefreshTokenInput) (*TokenResponse, error) {
 	log := logger.FromCtx(ctx, s.logger)
 
 	claims, err := s.tokenService.ValidateToken(input.RefreshToken)
@@ -247,27 +247,27 @@ func (s *AuthService) RefreshToken(ctx context.Context, input RefreshTokenInput)
 	return token, err
 }
 
-func (s *AuthService) ChangePassword(ctx context.Context, userID uint, input ChangePasswordInput) error {
-	db := s.db.Get().WithContext(ctx)
-	log := logger.FromCtx(ctx, s.logger).With(slog.Uint64("user_id", uint64(userID)))
+func (s *authService) ChangePassword(ctx context.Context, userID uint, input ChangePasswordInput) error {
+	db := s.db.WithContext(ctx)
+	log := logger.WithUserID(logger.FromCtx(ctx, s.logger), userID)
 
 	var user models.User
 	if err := db.First(&user, userID).Error; err != nil {
 		if goerrors.Is(err, database.ErrRecordNotFound) {
 			log.Warn("user not found")
-			return errors.New(404, "not found")
+			return errors.ErrUnauthorized
 		}
 		log.Error("failed to get user", logger.Err(err))
 		return err
 	}
 
 	if !password.CheckPasswordHash(input.OldPassword, user.Password) {
-		return errors.New(400, "incorrect old password")
+		return errors.ErrIncorrectOldPassword
 	}
 
 	if input.OldPassword == input.NewPassword {
 		log.Warn("new password matches old password")
-		return errors.New(400, "new password cannot be the same as old password")
+		return errors.ErrNewPasswordSameAsOld
 	}
 
 	hashedPassword, err := password.HashPassword(input.NewPassword)
@@ -284,14 +284,18 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID uint, input Cha
 	return nil
 }
 
-func (s *AuthService) Login2FA(ctx context.Context, input Login2FAInput) (*TokenResponse, error) {
-	db := s.db.Get().WithContext(ctx)
-	log := logger.FromCtx(ctx, s.logger).With(slog.String("username", input.Username))
+func (s *authService) Login2FA(ctx context.Context, input Login2FAInput) (*TokenResponse, error) {
+	db := s.db.WithContext(ctx)
+	log := logger.WithUsername(logger.FromCtx(ctx, s.logger), input.Username)
 
 	var user models.User
 	if err := db.First(&user, "LOWER(username) = LOWER(?)", input.Username).Error; err != nil {
-		log.Warn("user not found")
-		return nil, errors.New(400, "invalid request")
+		if goerrors.Is(err, database.ErrRecordNotFound) {
+			log.Warn("user not found")
+			return nil, errors.ErrUnauthorized
+		}
+		log.Error("failed to get user", logger.Err(err))
+		return nil, err
 	}
 
 	key := s.get2FAAuthKey(user.ID)
@@ -302,17 +306,17 @@ func (s *AuthService) Login2FA(ctx context.Context, input Login2FAInput) (*Token
 	}
 	if exists == 0 {
 		log.Warn("2FA auth key not found in redis, login flow not initiated")
-		return nil, errors.New(400, "invalid request")
+		return nil, errors.ErrTwoFAFlowNotInitiated
 	}
 
 	if !user.TwoFAEnabled {
 		log.Info("2FA not enabled for user")
-		return nil, errors.New(400, "2FA not enabled for user")
+		return nil, errors.ErrTwoFANotEnabled
 	}
 
 	if !totp.Validate(input.Code, user.TwoFASecret.String) {
 		log.Warn("invalid 2FA code")
-		return nil, errors.New(400, "invalid 2FA code")
+		return nil, errors.ErrInvalid2FACode
 	}
 
 	if err := s.redis.Client.Del(ctx, key).Err(); err != nil {
@@ -331,19 +335,23 @@ func (s *AuthService) Login2FA(ctx context.Context, input Login2FAInput) (*Token
 	return token, err
 }
 
-func (s *AuthService) Enable2FA(ctx context.Context, userID uint) (*TwoFASetupResponse, error) {
-	db := s.db.Get().WithContext(ctx)
-	log := logger.FromCtx(ctx, s.logger).With(slog.Uint64("user_id", uint64(userID)))
+func (s *authService) Enable2FA(ctx context.Context, userID uint) (*TwoFASetupResponse, error) {
+	db := s.db.WithContext(ctx)
+	log := logger.WithUserID(logger.FromCtx(ctx, s.logger), userID)
 
 	var user models.User
 	if err := db.First(&user, userID).Error; err != nil {
-		log.Warn("user not found")
-		return nil, errors.New(400, "invalid request")
+		if goerrors.Is(err, database.ErrRecordNotFound) {
+			log.Warn("user not found")
+			return nil, errors.ErrUnauthorized
+		}
+		log.Error("failed to get user", logger.Err(err))
+		return nil, err
 	}
 
 	if user.TwoFAEnabled {
 		log.Info("2FA is already enabled")
-		return nil, errors.New(400, "2FA is already enabled")
+		return nil, errors.ErrTwoFAAlreadyEnabled
 	}
 
 	key, err := totp.Generate(totp.GenerateOpts{
@@ -359,7 +367,7 @@ func (s *AuthService) Enable2FA(ctx context.Context, userID uint) (*TwoFASetupRe
 	if err = db.Model(&user).Updates(map[string]any{
 		"two_fa_secret": key.Secret(),
 	}).Error; err != nil {
-		log.Error("failed to update user: two_fa_secret", logger.Err(err))
+		log.Error("failed to set two_fa_secret", logger.Err(err))
 		return nil, err
 	}
 
@@ -381,47 +389,55 @@ func (s *AuthService) Enable2FA(ctx context.Context, userID uint) (*TwoFASetupRe
 	}, nil
 }
 
-func (s *AuthService) Verify2FA(ctx context.Context, userID uint, input Verify2FAInput) error {
-	db := s.db.Get().WithContext(ctx)
-	log := logger.FromCtx(ctx, s.logger).With(slog.Uint64("user_id", uint64(userID)))
+func (s *authService) Verify2FA(ctx context.Context, userID uint, input Verify2FAInput) error {
+	db := s.db.WithContext(ctx)
+	log := logger.WithUserID(logger.FromCtx(ctx, s.logger), userID)
 
 	var user models.User
 	if err := db.First(&user, userID).Error; err != nil {
-		log.Warn("user not found")
-		return errors.New(400, "invalid request")
+		if goerrors.Is(err, database.ErrRecordNotFound) {
+			log.Warn("user not found")
+			return errors.ErrUnauthorized
+		}
+		log.Error("failed to get user", logger.Err(err))
+		return err
 	}
 
 	if user.TwoFAEnabled {
 		log.Info("2FA is already enabled")
-		return errors.New(400, "2FA is already enabled")
+		return errors.ErrTwoFAAlreadyEnabled
 	}
 
 	if !totp.Validate(input.Code, user.TwoFASecret.String) {
-		return errors.New(400, "invalid 2FA code")
+		return errors.ErrInvalid2FACode
 	}
 
 	if err := db.Model(&user).Updates(map[string]any{
 		"two_fa_enabled": true,
 	}).Error; err != nil {
-		log.Error("failed to update user: two_fa_enabled", logger.Err(err))
+		log.Error("failed to enable 2FA", logger.Err(err))
 		return err
 	}
 	return nil
 }
 
-func (s *AuthService) Disable2FA(ctx context.Context, userID uint) error {
-	db := s.db.Get().WithContext(ctx)
-	log := logger.FromCtx(ctx, s.logger).With(slog.Uint64("user_id", uint64(userID)))
+func (s *authService) Disable2FA(ctx context.Context, userID uint) error {
+	db := s.db.WithContext(ctx)
+	log := logger.WithUserID(logger.FromCtx(ctx, s.logger), userID)
 
 	var user models.User
-	if err := db.Select("id", "two_fa_enabled").First(&user, userID).Error; err != nil {
-		log.Warn("user not found")
-		return errors.New(400, "invalid request")
+	if err := db.First(&user, userID).Error; err != nil {
+		if goerrors.Is(err, database.ErrRecordNotFound) {
+			log.Warn("user not found")
+			return errors.ErrUnauthorized
+		}
+		log.Error("failed to get user", logger.Err(err))
+		return err
 	}
 
 	if !user.TwoFAEnabled {
 		log.Info("2FA is not enabled")
-		return errors.New(400, "2FA is not enabled")
+		return errors.ErrTwoFANotEnabled
 	}
 
 	if err := db.Model(&user).Updates(map[string]any{

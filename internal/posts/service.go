@@ -21,21 +21,21 @@ type IPostService interface {
 	DeletePost(ctx context.Context, userID uint, postID uint) error
 }
 
-type PostService struct {
+type postService struct {
 	db     *database.DB
 	logger *slog.Logger
 }
 
 func NewPostService(db *database.DB, logger *slog.Logger) IPostService {
-	return &PostService{
+	return &postService{
 		db:     db,
 		logger: logger,
 	}
 }
 
-func (s *PostService) CreatePost(ctx context.Context, userID uint, input CreatePostInput) (*PostResponse, error) {
-	db := s.db.Get().WithContext(ctx)
-	log := logger.FromCtx(ctx, s.logger).With(slog.Any("user_id", userID))
+func (s *postService) CreatePost(ctx context.Context, userID uint, input CreatePostInput) (*PostResponse, error) {
+	db := s.db.WithContext(ctx)
+	log := logger.WithUserID(logger.FromCtx(ctx, s.logger), userID)
 
 	log.Info("creating new post")
 	log.Debug("post input data", slog.Any("input", input))
@@ -50,7 +50,7 @@ func (s *PostService) CreatePost(ctx context.Context, userID uint, input CreateP
 	post.Entities = entities
 	if err := ValidatePostEntities(post); err != nil {
 		log.Warn("post entities validation failed", logger.Err(err))
-		return nil, errors.New(400, err.Error())
+		return nil, errors.BadRequest(err.Error())
 	}
 
 	if err := db.Create(&post).Error; err != nil {
@@ -59,21 +59,18 @@ func (s *PostService) CreatePost(ctx context.Context, userID uint, input CreateP
 	}
 
 	if err := db.Preload("Author").Preload("Entities").First(&post, post.ID).Error; err != nil {
-		log.Error("failed to load post with relations",
-			logger.Err(err),
-			slog.Any("post_id", post.ID),
-		)
+		log.Error("failed to fetch post from database", logger.Err(err))
 		return nil, err
 	}
 
-	log.Info("post created successfully", slog.Any("post_id", post.ID))
+	log.Info("post created successfully", slog.Uint64("post_id", uint64(post.ID)))
 
 	return MapPostToResponse(post), nil
 }
 
-func (s *PostService) GetPost(ctx context.Context, postID uint, userID *uint) (*PostResponse, error) {
-	db := s.db.Get().WithContext(ctx)
-	log := logger.FromCtx(ctx, s.logger).With(slog.Any("post_id", postID))
+func (s *postService) GetPost(ctx context.Context, postID uint, userID *uint) (*PostResponse, error) {
+	db := s.db.WithContext(ctx)
+	log := logger.FromCtx(ctx, s.logger).With(slog.Uint64("post_id", uint64(postID)))
 
 	log.Info("fetching post")
 
@@ -113,8 +110,8 @@ func (s *PostService) GetPost(ctx context.Context, postID uint, userID *uint) (*
 	return MapPostToResponse(post), nil
 }
 
-func (s *PostService) GetPosts(ctx context.Context, params FilterParams, userID *uint) (*ListResponse, error) {
-	db := s.db.Get().WithContext(ctx)
+func (s *postService) GetPosts(ctx context.Context, params FilterParams, userID *uint) (*ListResponse, error) {
+	db := s.db.WithContext(ctx)
 	log := logger.FromCtx(ctx, s.logger)
 
 	log.Info("fetching posts list")
@@ -174,17 +171,18 @@ func (s *PostService) GetPosts(ctx context.Context, params FilterParams, userID 
 		Result: result,
 	}
 
-	log.Info("posts retrieved successfully", slog.Int64("total", total))
+	log.Info("posts retrieved successfully",
+		slog.Int64("total", total),
+		slog.Int("returned", len(posts)),
+		slog.Bool("authenticated", userID != nil),
+	)
 
 	return listResponse, nil
 }
 
-func (s *PostService) UpdatePost(ctx context.Context, userID uint, postID uint, input CreatePostInput) (*PostResponse, error) {
-	db := s.db.Get().WithContext(ctx)
-	log := logger.FromCtx(
-		ctx,
-		s.logger,
-	).With(slog.Any("user_id", userID), slog.Any("post_id", postID))
+func (s *postService) UpdatePost(ctx context.Context, userID uint, postID uint, input CreatePostInput) (*PostResponse, error) {
+	db := s.db.WithContext(ctx)
+	log := logger.WithUserID(logger.FromCtx(ctx, s.logger), userID).With(slog.Uint64("post_id", uint64(postID)))
 
 	log.Info("updating post")
 	log.Debug("update input data", slog.Any("input", input))
@@ -202,10 +200,10 @@ func (s *PostService) UpdatePost(ctx context.Context, userID uint, postID uint, 
 
 		if post.AuthorID != userID {
 			log.Warn("unauthorized update attempt",
-				slog.Any("post_author_id", post.AuthorID),
-				slog.Any("request_user_id", userID),
+				slog.Uint64("post_author_id", uint64(post.AuthorID)),
+				slog.Uint64("request_user_id", uint64(userID)),
 			)
-			return errors.New(403, "Forbidden: You are not author of this post")
+			return errors.ErrForbidden
 		}
 
 		log.Debug("updating post fields")
@@ -229,7 +227,7 @@ func (s *PostService) UpdatePost(ctx context.Context, userID uint, postID uint, 
 
 			if err := ValidatePostEntities(post); err != nil {
 				log.Error("post entities validation failed during update", logger.Err(err))
-				return errors.New(400, err.Error())
+				return errors.BadRequest(err.Error())
 			}
 
 			for i := range entities {
@@ -262,12 +260,9 @@ func (s *PostService) UpdatePost(ctx context.Context, userID uint, postID uint, 
 	return MapPostToResponse(updatedPost), nil
 }
 
-func (s *PostService) DeletePost(ctx context.Context, userID uint, postID uint) error {
-	db := s.db.Get().WithContext(ctx)
-	log := logger.FromCtx(
-		ctx,
-		s.logger,
-	).With(slog.Any("user_id", userID), slog.Any("post_id", postID))
+func (s *postService) DeletePost(ctx context.Context, userID uint, postID uint) error {
+	db := s.db.WithContext(ctx)
+	log := logger.WithUserID(logger.FromCtx(ctx, s.logger), userID).With(slog.Uint64("post_id", uint64(postID)))
 
 	log.Info("deleting post")
 
@@ -283,10 +278,10 @@ func (s *PostService) DeletePost(ctx context.Context, userID uint, postID uint) 
 
 	if post.AuthorID != userID {
 		log.Warn("unauthorized deletion attempt",
-			"post_author_id", post.AuthorID,
-			"request_user_id", userID,
+			slog.Uint64("post_author_id", uint64(post.AuthorID)),
+			slog.Uint64("request_user_id", uint64(userID)),
 		)
-		return errors.New(403, "Forbidden: You are not author of this post")
+		return errors.ErrForbidden
 	}
 
 	if err := db.Unscoped().Select("Entities").Delete(&post).Error; err != nil {

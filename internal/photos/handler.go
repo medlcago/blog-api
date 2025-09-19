@@ -15,16 +15,18 @@ type IPhotoHandler interface {
 	UploadAvatar(ctx fiber.Ctx) error
 }
 
-type PhotoHandler struct {
+type photoHandler struct {
 	photoService IPhotoService
 }
 
 func NewPhotoHandler(photoService IPhotoService) IPhotoHandler {
-	return &PhotoHandler{photoService: photoService}
+	return &photoHandler{
+		photoService: photoService,
+	}
 
 }
 
-func (h *PhotoHandler) UploadAvatar(ctx fiber.Ctx) error {
+func (h *photoHandler) UploadAvatar(ctx fiber.Ctx) error {
 	user := users.MustGetUser(ctx)
 	requestID := requestid.FromContext(ctx)
 

@@ -5,6 +5,7 @@ import (
 	"blog-api/internal/auth"
 	"blog-api/internal/database"
 	"blog-api/internal/errors"
+	"blog-api/internal/logger"
 	"blog-api/internal/middleware"
 	"blog-api/internal/photos"
 	"blog-api/internal/posts"
@@ -136,18 +137,18 @@ func (s *Server) Run() error {
 					slog.Duration("timeout", s.Cfg.ServerConfig.ShutdownTimeout),
 				)
 			} else {
-				s.Logger.Info("Error during shutdown", slog.Any("error", err))
+				s.Logger.Info("Error during shutdown", logger.Err(err))
 			}
 		} else {
 			s.Logger.Info("Server stopped gracefully")
 		}
 
 		if err := s.DB.Close(); err != nil {
-			s.Logger.Error("Database close error", slog.Any("error", err))
+			s.Logger.Error("Database close error", logger.Err(err))
 		}
 
 		if err := s.RedisClient.Client.Close(); err != nil {
-			s.Logger.Error("Redis close error", slog.Any("error", err))
+			s.Logger.Error("Redis close error", logger.Err(err))
 		}
 
 		s.Logger.Info("Shutdown completed")

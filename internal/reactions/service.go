@@ -26,21 +26,20 @@ type IReactionService interface {
 	GetAvailableReactions(ctx context.Context) ([]*ReactionTypeResponse, error)
 }
 
-type ReactionService struct {
+type reactionService struct {
 	db     *database.DB
 	logger *slog.Logger
 }
 
 func NewReactionService(db *database.DB, logger *slog.Logger) IReactionService {
-	return &ReactionService{
+	return &reactionService{
 		db:     db,
 		logger: logger,
 	}
 }
 
-func (s *ReactionService) setReaction(ctx context.Context, userID uint, input SetReactionInput) (*ReactionResponse, error) {
-	log := logger.FromCtx(ctx, s.logger).With(
-		slog.Uint64("user_id", uint64(userID)),
+func (s *reactionService) setReaction(ctx context.Context, userID uint, input SetReactionInput) (*ReactionResponse, error) {
+	log := logger.WithUserID(logger.FromCtx(ctx, s.logger), userID).With(
 		slog.String("target_type", input.TargetType),
 		slog.Uint64("target_id", uint64(input.TargetID)),
 		slog.Uint64("reaction_type_id", uint64(input.ReactionID)),
@@ -48,75 +47,67 @@ func (s *ReactionService) setReaction(ctx context.Context, userID uint, input Se
 
 	if !slices.Contains(allowedTargets, input.TargetType) {
 		log.Warn("invalid target type")
-		return nil, errors.New(400, "invalid target type")
+		return nil, errors.BadRequest("invalid target type")
 	}
 
-	db := s.db.Get().WithContext(ctx)
+	db := s.db.WithContext(ctx)
 
 	var reactType models.ReactionType
 	if err := db.Where("id = ? AND is_active = ?", input.ReactionID, "true").First(&reactType).Error; err != nil {
 		if goerrors.Is(err, database.ErrRecordNotFound) {
 			log.Warn("invalid or inactive reaction")
-			return nil, errors.New(400, "invalid or inactive reaction")
+			return nil, errors.BadRequest("invalid or inactive reaction")
 		}
 		return nil, err
 	}
 
 	var finalReaction *models.Reaction
-
 	err := db.Transaction(func(tx *gorm.DB) error {
 		var existing models.Reaction
 		err := tx.Where("user_id = ? AND target_type = ? AND target_id = ?",
 			userID, input.TargetType, input.TargetID,
 		).First(&existing).Error
 
-		if err == nil {
-			if existing.ReactionTypeID == input.ReactionID {
-				// delete if the same type
-				log.Info("removing existing reaction")
-				if err := tx.Delete(&existing).Error; err != nil {
-					log.Error("failed to delete reaction", logger.Err(err))
-					return err
-				}
-				finalReaction = nil
-				return nil
-			} else {
-				log.Info("updating reaction",
-					slog.Uint64("new_reaction_type_id", uint64(input.ReactionID)),
-				)
-
-				existing.ReactionTypeID = input.ReactionID
-				if err := tx.Save(&existing).Error; err != nil {
-					log.Error("failed to update reaction", logger.Err(err))
-					return err
-				}
-				finalReaction = &existing
-				return nil
+		switch {
+		case err == nil && existing.ReactionTypeID == input.ReactionID:
+			log.Info("removing existing reaction")
+			if e := tx.Delete(&existing).Error; e != nil {
+				log.Error("failed to delete reaction", logger.Err(e))
+				return err
 			}
-		} else if !goerrors.Is(err, gorm.ErrRecordNotFound) {
-			log.Error("failed to fetch existing reaction", logger.Err(err))
-			return err
-		}
+			finalReaction = nil
 
-		log.Info("creating new reaction")
-		newReaction := models.Reaction{
-			UserID:         userID,
-			TargetID:       input.TargetID,
-			TargetType:     input.TargetType,
-			ReactionTypeID: input.ReactionID,
-		}
-		if err := tx.Create(&newReaction).Error; err != nil {
-			log.Error("failed to create reaction", logger.Err(err))
+		case err == nil:
+			log.Info("updating reaction", slog.Uint64("new_reaction_type_id", uint64(input.ReactionID)))
+			existing.ReactionTypeID = input.ReactionID
+			if e := tx.Save(&existing).Error; e != nil {
+				log.Error("failed to update reaction", logger.Err(e))
+				return err
+			}
+			finalReaction = &existing
+
+		case goerrors.Is(err, gorm.ErrRecordNotFound):
+			log.Info("creating new reaction")
+			newReaction := models.Reaction{
+				UserID:         userID,
+				TargetID:       input.TargetID,
+				TargetType:     input.TargetType,
+				ReactionTypeID: input.ReactionID,
+			}
+			if e := tx.Create(&newReaction).Error; e != nil {
+				log.Error("failed to create reaction", logger.Err(e))
+				return e
+			}
+			finalReaction = &newReaction
+
+		default:
+			log.Error("failed to fetch reaction", logger.Err(err))
 			return err
 		}
-		finalReaction = &newReaction
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
 
-	aggReact, err := GetReactionsAggregate(db, TargetPost, []uint{input.TargetID})
+	aggReact, err := GetReactionsAggregate(db, input.TargetType, []uint{input.TargetID})
 	if err != nil {
 		log.Error("failed to aggregate reactions", logger.Err(err))
 		return nil, err
@@ -145,7 +136,7 @@ func (s *ReactionService) setReaction(ctx context.Context, userID uint, input Se
 	return reactResponse, nil
 }
 
-func (s *ReactionService) SetPostReaction(ctx context.Context, userID uint, input SetPostReactionInput) (*ReactionResponse, error) {
+func (s *reactionService) SetPostReaction(ctx context.Context, userID uint, input SetPostReactionInput) (*ReactionResponse, error) {
 	return s.setReaction(ctx, userID,
 		SetReactionInput{
 			TargetType: TargetPost,
@@ -155,8 +146,8 @@ func (s *ReactionService) SetPostReaction(ctx context.Context, userID uint, inpu
 	)
 }
 
-func (s *ReactionService) GetAvailableReactions(ctx context.Context) ([]*ReactionTypeResponse, error) {
-	db := s.db.Get().WithContext(ctx)
+func (s *reactionService) GetAvailableReactions(ctx context.Context) ([]*ReactionTypeResponse, error) {
+	db := s.db.WithContext(ctx)
 	log := logger.FromCtx(ctx, s.logger)
 
 	var availableReactionTypes []models.ReactionType

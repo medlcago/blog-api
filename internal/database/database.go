@@ -2,6 +2,7 @@ package database
 
 import (
 	"blog-api/config"
+	"context"
 	"fmt"
 	"time"
 
@@ -39,6 +40,10 @@ func New(cfg config.DatabaseConfig) (*DB, error) {
 
 func (d *DB) Get() *gorm.DB {
 	return d.db
+}
+
+func (d *DB) WithContext(ctx context.Context) *gorm.DB {
+	return d.Get().WithContext(ctx)
 }
 
 func (d *DB) Close() error {

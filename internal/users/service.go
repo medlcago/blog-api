@@ -2,6 +2,7 @@ package users
 
 import (
 	"blog-api/internal/database"
+	"blog-api/internal/errors"
 	"blog-api/internal/logger"
 	"blog-api/internal/models"
 	"context"
@@ -13,26 +14,27 @@ type IUserService interface {
 	GetUserByID(ctx context.Context, userID uint) (*UserResponse, error)
 }
 
-type UserService struct {
+type userService struct {
 	db     *database.DB
 	logger *slog.Logger
 }
 
 func NewUserService(db *database.DB, logger *slog.Logger) IUserService {
-	return &UserService{
+	return &userService{
 		db:     db,
 		logger: logger,
 	}
 }
 
-func (s *UserService) GetUserByID(ctx context.Context, userID uint) (*UserResponse, error) {
-	db := s.db.Get().WithContext(ctx)
-	log := logger.FromCtx(ctx, s.logger).With(slog.Any("user_id", userID))
+func (s *userService) GetUserByID(ctx context.Context, userID uint) (*UserResponse, error) {
+	db := s.db.WithContext(ctx)
+	log := logger.WithUserID(logger.FromCtx(ctx, s.logger), userID)
 
 	var user models.User
 	if err := db.First(&user, userID).Error; err != nil {
 		if goerrors.Is(err, database.ErrRecordNotFound) {
 			log.Warn("user not found")
+			return nil, errors.ErrNotFound
 		}
 
 		log.Error("database query failed", logger.Err(err))

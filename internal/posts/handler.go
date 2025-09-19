@@ -19,24 +19,24 @@ type IPostHandler interface {
 	DeletePost(ctx fiber.Ctx) error
 }
 
-type PostHandler struct {
+type postHandler struct {
 	postService IPostService
 }
 
 func NewPostHandler(postService IPostService) IPostHandler {
-	return &PostHandler{
+	return &postHandler{
 		postService: postService,
 	}
 }
 
-func (h *PostHandler) CreatePost(ctx fiber.Ctx) error {
+func (h *postHandler) CreatePost(ctx fiber.Ctx) error {
 	user := users.MustGetUser(ctx)
 
 	requestID := requestid.FromContext(ctx)
 
 	var input CreatePostInput
 
-	if err := ctx.Bind().Body(&input); err != nil {
+	if err := ctx.Bind().JSON(&input); err != nil {
 		return err
 	}
 
@@ -55,7 +55,7 @@ func (h *PostHandler) CreatePost(ctx fiber.Ctx) error {
 	})
 }
 
-func (h *PostHandler) GetPost(ctx fiber.Ctx) error {
+func (h *postHandler) GetPost(ctx fiber.Ctx) error {
 	postId := fiber.Params[uint](ctx, "id")
 	requestID := requestid.FromContext(ctx)
 
@@ -81,7 +81,7 @@ func (h *PostHandler) GetPost(ctx fiber.Ctx) error {
 	})
 }
 
-func (h *PostHandler) GetPosts(ctx fiber.Ctx) error {
+func (h *postHandler) GetPosts(ctx fiber.Ctx) error {
 	requestID := requestid.FromContext(ctx)
 
 	user := users.GetUser(ctx)
@@ -108,14 +108,14 @@ func (h *PostHandler) GetPosts(ctx fiber.Ctx) error {
 	return ctx.JSON(response.NewPaginatedResponse(data.Total, data.Result))
 }
 
-func (h *PostHandler) UpdatePost(ctx fiber.Ctx) error {
+func (h *postHandler) UpdatePost(ctx fiber.Ctx) error {
 	user := users.MustGetUser(ctx)
 	postID := fiber.Params[uint](ctx, "id")
 
 	requestID := requestid.FromContext(ctx)
 
 	var input CreatePostInput
-	if err := ctx.Bind().Body(&input); err != nil {
+	if err := ctx.Bind().JSON(&input); err != nil {
 		return err
 	}
 
@@ -136,7 +136,7 @@ func (h *PostHandler) UpdatePost(ctx fiber.Ctx) error {
 	})
 }
 
-func (h *PostHandler) DeletePost(ctx fiber.Ctx) error {
+func (h *postHandler) DeletePost(ctx fiber.Ctx) error {
 	user := users.MustGetUser(ctx)
 	postID := fiber.Params[uint](ctx, "id")
 

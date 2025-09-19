@@ -1,6 +1,7 @@
 package errors
 
 import (
+	"net/http"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
@@ -20,6 +21,10 @@ func New(code int, msg string) *Error {
 		Code: code,
 		Msg:  msg,
 	}
+}
+
+func BadRequest(msg string) *Error {
+	return New(http.StatusBadRequest, msg)
 }
 
 type JSONError struct {

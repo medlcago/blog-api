@@ -22,17 +22,17 @@ type IAuthHandler interface {
 	Disable2FA(ctx fiber.Ctx) error
 }
 
-type AuthHandler struct {
+type authHandler struct {
 	authService IAuthService
 }
 
 func NewAuthHandler(authService IAuthService) IAuthHandler {
-	return &AuthHandler{
+	return &authHandler{
 		authService: authService,
 	}
 }
 
-func (h *AuthHandler) Register(ctx fiber.Ctx) error {
+func (h *authHandler) Register(ctx fiber.Ctx) error {
 	requestID := requestid.FromContext(ctx)
 
 	var input RegisterUserInput
@@ -57,7 +57,7 @@ func (h *AuthHandler) Register(ctx fiber.Ctx) error {
 
 }
 
-func (h *AuthHandler) Login(ctx fiber.Ctx) error {
+func (h *authHandler) Login(ctx fiber.Ctx) error {
 	requestID := requestid.FromContext(ctx)
 
 	var input LoginUserInput
@@ -78,7 +78,7 @@ func (h *AuthHandler) Login(ctx fiber.Ctx) error {
 	return ctx.JSON(response.NewResponse(res))
 }
 
-func (h *AuthHandler) RefreshToken(ctx fiber.Ctx) error {
+func (h *authHandler) RefreshToken(ctx fiber.Ctx) error {
 	requestID := requestid.FromContext(ctx)
 
 	var input RefreshTokenInput
@@ -103,7 +103,7 @@ func (h *AuthHandler) RefreshToken(ctx fiber.Ctx) error {
 	})
 }
 
-func (h *AuthHandler) ChangePassword(ctx fiber.Ctx) error {
+func (h *authHandler) ChangePassword(ctx fiber.Ctx) error {
 	requestID := requestid.FromContext(ctx)
 
 	user := users.MustGetUser(ctx)
@@ -122,7 +122,7 @@ func (h *AuthHandler) ChangePassword(ctx fiber.Ctx) error {
 	return ctx.SendString("OK")
 }
 
-func (h *AuthHandler) Login2FA(ctx fiber.Ctx) error {
+func (h *authHandler) Login2FA(ctx fiber.Ctx) error {
 	requestID := requestid.FromContext(ctx)
 
 	var input Login2FAInput
@@ -142,7 +142,7 @@ func (h *AuthHandler) Login2FA(ctx fiber.Ctx) error {
 	return ctx.JSON(response.NewResponse(res))
 }
 
-func (h *AuthHandler) Enable2FA(ctx fiber.Ctx) error {
+func (h *authHandler) Enable2FA(ctx fiber.Ctx) error {
 	user := users.MustGetUser(ctx)
 
 	requestID := requestid.FromContext(ctx)
@@ -158,7 +158,7 @@ func (h *AuthHandler) Enable2FA(ctx fiber.Ctx) error {
 	return ctx.JSON(response.NewResponse(res))
 }
 
-func (h *AuthHandler) Verify2FA(ctx fiber.Ctx) error {
+func (h *authHandler) Verify2FA(ctx fiber.Ctx) error {
 	user := users.MustGetUser(ctx)
 
 	requestID := requestid.FromContext(ctx)
@@ -180,7 +180,7 @@ func (h *AuthHandler) Verify2FA(ctx fiber.Ctx) error {
 	return ctx.SendString("OK")
 }
 
-func (h *AuthHandler) Disable2FA(ctx fiber.Ctx) error {
+func (h *authHandler) Disable2FA(ctx fiber.Ctx) error {
 	user := users.MustGetUser(ctx)
 
 	requestID := requestid.FromContext(ctx)

@@ -50,9 +50,15 @@ func New(env Env) *slog.Logger {
 	return slog.New(handler)
 }
 
-func WithRequestID(log *slog.Logger, reqID string) *slog.Logger {
+func WithUserID(log *slog.Logger, userID uint) *slog.Logger {
 	return log.With(
-		slog.String(string(RequestIDKey), reqID),
+		slog.Uint64("user_id", uint64(userID)),
+	)
+}
+
+func WithUsername(log *slog.Logger, username string) *slog.Logger {
+	return log.With(
+		slog.String("username", username),
 	)
 }
 

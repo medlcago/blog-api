@@ -15,17 +15,17 @@ type IReactionHandler interface {
 	GetAvailableReactions(ctx fiber.Ctx) error
 }
 
-type ReactionHandler struct {
+type reactionHandler struct {
 	reactionService IReactionService
 }
 
 func NewReactionHandler(reactionService IReactionService) IReactionHandler {
-	return &ReactionHandler{
+	return &reactionHandler{
 		reactionService: reactionService,
 	}
 }
 
-func (h *ReactionHandler) SetPostReaction(ctx fiber.Ctx) error {
+func (h *reactionHandler) SetPostReaction(ctx fiber.Ctx) error {
 	user := users.MustGetUser(ctx)
 
 	requestID := requestid.FromContext(ctx)
@@ -49,7 +49,7 @@ func (h *ReactionHandler) SetPostReaction(ctx fiber.Ctx) error {
 	return ctx.JSON(response.NewResponse(res))
 }
 
-func (h *ReactionHandler) GetAvailableReactions(ctx fiber.Ctx) error {
+func (h *reactionHandler) GetAvailableReactions(ctx fiber.Ctx) error {
 	requestID := requestid.FromContext(ctx)
 
 	res, err := h.reactionService.GetAvailableReactions(context.WithValue(ctx, logger.RequestIDKey, requestID))

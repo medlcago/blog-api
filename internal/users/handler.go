@@ -10,14 +10,14 @@ type IUserHandler interface {
 	GetMe(ctx fiber.Ctx) error
 }
 
-type UserHandler struct {
+type userHandler struct {
 }
 
 func NewUserHandler() IUserHandler {
-	return &UserHandler{}
+	return &userHandler{}
 }
 
-func (h *UserHandler) GetMe(ctx fiber.Ctx) error {
+func (h *userHandler) GetMe(ctx fiber.Ctx) error {
 	user := MustGetUser(ctx)
 	return ctx.JSON(response.NewResponse(user))
 }

@@ -6,8 +6,6 @@ import (
 	_ "image/png"
 	"io"
 	"net/http"
-	"path/filepath"
-	"strings"
 
 	"golang.org/x/image/webp"
 )
@@ -18,10 +16,6 @@ func DecodeImageConfig(r io.Reader, contentType string) (image.Config, error) {
 	}
 	img, _, err := image.DecodeConfig(r)
 	return img, err
-}
-
-func GetFileExt(filename string) string {
-	return strings.ToLower(filepath.Ext(filename))
 }
 
 func DetectContentType(r io.Reader) (string, error) {

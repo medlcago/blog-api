@@ -18,28 +18,28 @@ import (
 type IPhotoService interface {
 	UploadAvatar(ctx context.Context, userID uint, file *multipart.FileHeader) (*UploadAvatarResponse, error)
 }
-type PhotoService struct {
+type photoService struct {
 	db     *database.DB
 	minio  *storage.MinioClient
 	logger *slog.Logger
 }
 
 func NewPhotoService(db *database.DB, minio *storage.MinioClient, logger *slog.Logger) IPhotoService {
-	return &PhotoService{
+	return &photoService{
 		db:     db,
 		minio:  minio,
 		logger: logger,
 	}
 }
 
-func (s *PhotoService) UploadAvatar(ctx context.Context, userID uint, file *multipart.FileHeader) (*UploadAvatarResponse, error) {
-	log := logger.FromCtx(ctx, s.logger).With(slog.Any("user_id", userID))
+func (s *photoService) UploadAvatar(ctx context.Context, userID uint, file *multipart.FileHeader) (*UploadAvatarResponse, error) {
+	log := logger.WithUserID(logger.FromCtx(ctx, s.logger), userID)
 
 	log.Info("starting avatar upload")
 
 	if err := ValidateAvatar(file); err != nil {
 		log.Warn("avatar validation failed", logger.Err(err))
-		return nil, errors.New(400, err.Error())
+		return nil, errors.BadRequest(err.Error())
 	}
 
 	src, err := file.Open()
@@ -56,7 +56,7 @@ func (s *PhotoService) UploadAvatar(ctx context.Context, userID uint, file *mult
 	filename := fmt.Sprintf("avatars/%d", userID)
 	url := fmt.Sprintf("http://%s/%s/%s?ts=%d", s.minio.Client.EndpointURL().Host, s.minio.Bucket, filename, time.Now().UTC().UnixNano())
 
-	db := s.db.Get().WithContext(ctx)
+	db := s.db.WithContext(ctx)
 
 	log.Info("uploading file to minio storage")
 	_, err = s.minio.Client.PutObject(ctx, s.minio.Bucket, filename, src, file.Size, minio.PutObjectOptions{
